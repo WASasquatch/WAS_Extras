@@ -7,4 +7,7 @@ Experimental nodes, PR demonstrations, or other random stuff I don't feel warran
 
 This node allows for mask offset erosion, and dilation for fine-tuning th emask. It also uses the mask result as the pixel masking for cleaner boundaries and ability to erode (shrink) the mask. 
 
+### Installation:
+Download the WAS_VAEEncodeForInpaint.py to your `ComfyUI/custom_nodes` folder
+
 
