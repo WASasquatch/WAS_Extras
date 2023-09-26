@@ -11,7 +11,7 @@ This node allows for mask offset erosion, and dilation for fine-tuning th emask.
 Download the WAS_VAEEncodeForInpaint.py to your `ComfyUI/custom_nodes` folder
 
 ## Conditioning (Blend)
-Blend latents by different interpolation/operation methods. 
+Blend prompt conditioning by different interpolation/operation methods. 
 
 ### Installation:
 Download the WAS_ConditioningBlend.py to your `ComfyUI/custom_nodes` folder
