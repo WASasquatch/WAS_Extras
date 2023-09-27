@@ -1,5 +1,3 @@
-# Provides demonstration of PR https://github.com/comfyanonymous/ComfyUI/pull/1574/commits/297d1cff422198806cda40e4b6d71a6e6aa05453
-
 import torch
 import math
 
