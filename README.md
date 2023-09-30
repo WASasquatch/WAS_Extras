@@ -15,3 +15,9 @@ Blend prompt conditioning by different interpolation/operation methods.
 
 ### Installation:
 Download the WAS_ConditioningBlend.py to your `ComfyUI/custom_nodes` folder
+
+## Vivid Sharpen
+A python implementation of the Photoshop Vivid Sharpen technique
+
+### Installation:
+Download the WAS_VividSharpen.py to your `ComfyUI/custom_nodes` folder
