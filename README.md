@@ -19,5 +19,7 @@ Download the WAS_ConditioningBlend.py to your `ComfyUI/custom_nodes` folder
 ## Vivid Sharpen
 A python implementation of the Photoshop Vivid Sharpen technique
 
+![image](https://github.com/WASasquatch/WAS_Extras/assets/1151589/017e35e4-9133-4a93-bb9f-bf693f7f8829)
+
 ### Installation:
 Download the WAS_VividSharpen.py to your `ComfyUI/custom_nodes` folder
