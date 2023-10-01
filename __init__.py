@@ -3,6 +3,7 @@ import time
 
 extras = [
     ".ConditioningBlend",
+    ".DebugThis",
     ".VAEEncodeForInpaint",
     ".VividSharpen",
 ]
