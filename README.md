@@ -1,5 +1,11 @@
 # WAS_Extras
-Experimental nodes, PR demonstrations, or other random stuff I don't feel warrants a dedicated repo
+Experimental nodes, or other random extra helper nodes. 
+
+# Installation
+
+- Git clone the repo to `ComfyUI/custom_nodes`
+- Or; install with [ComfyUI Manager](https://github.com/ltdrdata/ComfyUI-Manager)
+- Or; download the individual custom node `.py` files and put the in your `ComfyUI/custom_nodes` folder.
 
 
 ## Inpainting VAE Encode
@@ -7,19 +13,10 @@ Experimental nodes, PR demonstrations, or other random stuff I don't feel warran
 
 This node allows for mask offset erosion, and dilation for fine-tuning th emask. It also uses the mask result as the pixel masking for cleaner boundaries and ability to erode (shrink) the mask. 
 
-### Installation:
-Download the WAS_VAEEncodeForInpaint.py to your `ComfyUI/custom_nodes` folder
-
 ## Conditioning (Blend)
 Blend prompt conditioning by different interpolation/operation methods. 
-
-### Installation:
-Download the WAS_ConditioningBlend.py to your `ComfyUI/custom_nodes` folder
 
 ## Vivid Sharpen
 A python implementation of the Photoshop Vivid Sharpen technique
 
 ![image](https://github.com/WASasquatch/WAS_Extras/assets/1151589/ebc3a81b-abf2-436e-aa2a-495522554c16)
-
-### Installation:
-Download the WAS_VividSharpen.py to your `ComfyUI/custom_nodes` folder
