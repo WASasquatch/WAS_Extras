@@ -40,11 +40,10 @@ def rgb_float_if_hex(blend_data):
         return hex_to_rgb_float(blend_data)
     return blend_data
 
-def vivid_sharpen(image, radius=5):
+def vivid_sharpen(image, radius=5, strength=1.0):
     original = image.copy()
-    copy = original.copy()
-    sg = Image.new('RGB', copy.size, (255, 255, 255))
-    sg.paste(copy, (0, 0))
+    sg = Image.new('RGB', original.size, (255, 255, 255))
+    sg.paste(original, (0, 0))
     sg = ImageOps.invert(sg)
     sg = sg.filter(ImageFilter.GaussianBlur(radius=radius))
 
@@ -55,6 +54,7 @@ def vivid_sharpen(image, radius=5):
     result_data = overlay(original_data, result_data, 1.0)
 
     result_image = Image.fromarray((result_data * 255).astype('uint8'))
+    result_image = Image.blend(original, result_image, strength)
     
     return result_image
 
@@ -67,7 +67,8 @@ class VividSharpen:
         return {
             "required": {
                 "images": ("IMAGE",),
-                "strength": ("FLOAT", {"default": 1.5, "min": 0.01, "max": 64.0, "step": 0.01}),
+                "radius": ("FLOAT", {"default": 1.5, "min": 0.01, "max": 64.0, "step": 0.01}),
+                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
             },
         }
 
@@ -78,16 +79,16 @@ class VividSharpen:
 
     CATEGORY = "image/postprocessing"
 
-    def sharpen(self, images, strength):
+    def sharpen(self, images, radius, strength):
     
         results = []
         if images.size(0) > 1:
             for image in images:
                 image = tensor2pil(image)
-                results.append(pil2tensor(vivid_sharpen(image, strength)))
+                results.append(pil2tensor(vivid_sharpen(image, radius=radius, strength=strength)))
             results = torch.cat(results, dim=0)
         else:
-            results = pil2tensor(vivid_sharpen(tensor2pil(images), strength))
+            results = pil2tensor(vivid_sharpen(tensor2pil(images), radius=radius, strength=strength))
             
         return (results,)
 
