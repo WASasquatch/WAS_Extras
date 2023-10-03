@@ -5,14 +5,14 @@ Experimental nodes, or other random extra helper nodes.
 
 - Git clone the repo to `ComfyUI/custom_nodes`
 - Or; install with [ComfyUI Manager](https://github.com/ltdrdata/ComfyUI-Manager)
-- Or; download the individual custom node `.py` files and put the in your `ComfyUI/custom_nodes` folder.
+- Or; download the individual custom node `.py` files and put them in your `ComfyUI/custom_nodes` folder.
 
 
 ## Conditioning (Blend)
 Blend prompt conditioning by different interpolation/operation methods. 
 
 ## DebugThis
-Debug any input. It will print the object, as well as display a mapping of it if it's not a common time (like `str`, `int`, `float`, etc).
+Debug any input. It will print the object, as well as display a mapping of it if it's not a common type (like `str`, `int`, `float`, etc).
 
 ## Inpainting VAE Encode
 [**Download Inpainting_Example_Workflow_And_Images.zip**](https://github.com/WASasquatch/WAS_Extras/files/12719211/Inpainting_Example_Workflow_And_Images.zip)
