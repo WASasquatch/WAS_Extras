@@ -3,9 +3,11 @@ Experimental nodes, or other random extra helper nodes.
 
 # Installation
 
-- Git clone the repo to `ComfyUI/custom_nodes`
+- Git clone the repo to `ComfyUI/custom_nodes` and run the `requirements.txt` with your `/ComfyUI/python_embeded/python.exe` or env python.
 - Or; install with [ComfyUI Manager](https://github.com/ltdrdata/ComfyUI-Manager)
-- Or; download the individual custom node `.py` files and put them in your `ComfyUI/custom_nodes` folder.
+- Or; download the individual custom node `.py` files and put them in your `ComfyUI/custom_nodes` folder. **Note:** Still will need to install `requirements.txt` if using `ksampler_sequence.py`
+
+
 
 
 ## Conditioning (Blend)
