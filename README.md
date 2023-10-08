@@ -25,3 +25,10 @@ This node allows for mask offset erosion, and dilation for fine-tuning th emask.
 A python implementation of the Photoshop Vivid Sharpen technique
 
 ![image](https://github.com/WASasquatch/WAS_Extras/assets/1151589/ebc3a81b-abf2-436e-aa2a-495522554c16)
+
+## KSampler Sequence
+A sequencer setup that allows you to sequence prompts in a looped Ksampler
+
+[KSampler_Sequence_Workflow.zip](https://github.com/WASasquatch/WAS_Extras/files/12840983/KSampler_Sequence_Workflow.zip)
+![image](https://github.com/WASasquatch/WAS_Extras/assets/1151589/83624414-4de8-4dcc-bf9e-2a1d1a8a2b10)
+
