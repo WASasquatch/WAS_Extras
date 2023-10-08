@@ -31,7 +31,7 @@ A sequencer setup that allows you to sequence prompts in a looped Ksampler
 
 ### Provides
  -  CLIP Text Encode Sequence (Advanced)
-   - _Note: CLIPTextEncode will use BLK Advanced CLIP Text Encode if available. _
+   - **Note**: *CLIPTextEncode will use BLK Advanced CLIP Text Encode if available.*
  -  KSampler Sequence
 
 [KSampler_Sequence_Workflow.zip](https://github.com/WASasquatch/WAS_Extras/files/12840983/KSampler_Sequence_Workflow.zip)
