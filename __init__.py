@@ -14,7 +14,8 @@ extras = [
     ".DebugThis",
     ".VAEEncodeForInpaint",
     ".VividSharpen",
-    ".ksampler_sequence"
+    ".ksampler_sequence",
+    ".BLVaeEncode"
 ]
 
 NODE_CLASS_MAPPINGS = {}
