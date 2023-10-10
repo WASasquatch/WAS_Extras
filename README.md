@@ -37,3 +37,9 @@ A sequencer setup that allows you to sequence prompts in a looped Ksampler
 [KSampler_Sequence_Workflow.zip](https://github.com/WASasquatch/WAS_Extras/files/12840983/KSampler_Sequence_Workflow.zip)
 ![image](https://github.com/WASasquatch/WAS_Extras/assets/1151589/83624414-4de8-4dcc-bf9e-2a1d1a8a2b10)
 
+### BLVAEEncode
+
+A VAE Encode that can store the latent in the workflow for easy sharing, potentially? Or something.
+
+Workflow Example:
+![ComfyUI_02554_](https://github.com/WASasquatch/WAS_Extras/assets/1151589/1a4f33e2-fb7a-49c7-90eb-727ecbef8ff7)
