@@ -1,5 +1,9 @@
+import base64
+import json
 import hashlib
+import numpy as np
 import torch
+import zlib
 
 import nodes
 
@@ -36,7 +40,6 @@ class BLVAEEncode:
     CATEGORY = "latent"
 
     def encode(self, vae, tiled, tile_size, store_or_load_latent, remove_latent_on_load, delete_workflow_latent, image=None, extra_pnginfo=None, unique_id=None):
-
         workflow_latent = None
         latent_key = f"latent_{unique_id}"
 
@@ -97,23 +100,16 @@ class BLVAEEncode:
         return hash_obj.hexdigest()
 
     def serialize(self, obj):
-        if isinstance(obj, dict):
-            return {key: self.serialize(value) for key, value in obj.items()}
-        elif torch.is_tensor(obj):
-            return {"type": "latent", "data": obj.tolist(), "shape": list(obj.shape)}
-        else:
-            return obj
+        json_str = json.dumps(obj, default=lambda o: {'__tensor__': True, 'value': o.cpu().numpy().tolist()} if torch.is_tensor(o) else o.__dict__)
+        compressed_data = zlib.compress(json_str.encode('utf-8'))
+        base64_encoded = base64.b64encode(compressed_data).decode('utf-8')
+        return base64_encoded
 
-    def deserialize(self, serialized_obj):
-        if isinstance(serialized_obj, dict):
-            if serialized_obj.get("type") == "latent":
-                data = serialized_obj["data"]
-                shape = serialized_obj["shape"]
-                return torch.tensor(data).view(*shape)
-            else:
-                return {key: self.deserialize(value) for key, value in serialized_obj.items()}
-        else:
-            return serialized_obj
+    def deserialize(self, base64_str):
+        compressed_data = base64.b64decode(base64_str)
+        json_str = zlib.decompress(compressed_data).decode('utf-8')
+        obj = json.loads(json_str, object_hook=lambda d: torch.tensor(d['value']) if '__tensor__' in d else d)
+        return obj
 
 NODE_CLASS_MAPPINGS = {
     "BLVAEEncode": BLVAEEncode,
