@@ -10,7 +10,13 @@ import comfy.samplers
 import comfy.model_management
 import nodes
 
-from WAS_Extras import cstr
+from cstr import cstr as cstr_instancer
+
+cstr = cstr_instancer()
+#! MESSAGE TEMPLATES
+cstr.add_code("msg", f"{cstr.color.LIGHTBLUE}KSampler Sequence: {cstr.color.END}")
+cstr.add_code("warning", f"{cstr.color.LIGHTBLUE}KSampler Sequence {cstr.color.LIGHTYELLOW}Warning: {cstr.color.END}")
+cstr.add_code("error", f"{cstr.color.LIGHTRED}KSampler Sequence {cstr.color.END}Error: {cstr.color.END}")
 
 def slerp(strength, tensor_from, tensor_to, epsilon=1e-6):
     """
