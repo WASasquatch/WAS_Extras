@@ -2,12 +2,13 @@ import importlib
 import traceback
 import time
 
-from cstr import cstr
+from cstr import cstr as cstr_instancer
 
+cstr = cstr_instancer()
 #! MESSAGE TEMPLATES
-cstr.color.add_code("msg", f"{cstr.color.LIGHTBLUE}WAS Extras: {cstr.color.END}")
-cstr.color.add_code("warning", f"{cstr.color.LIGHTBLUE}WAS Extras {cstr.color.LIGHTYELLOW}Warning: {cstr.color.END}")
-cstr.color.add_code("error", f"{cstr.color.LIGHTRED}WAS Extras {cstr.color.END}Error: {cstr.color.END}")
+cstr.add_code("msg", f"{cstr.color.LIGHTBLUE}WAS Extras: {cstr.color.END}")
+cstr.add_code("warning", f"{cstr.color.LIGHTBLUE}WAS Extras {cstr.color.LIGHTYELLOW}Warning: {cstr.color.END}")
+cstr.add_code("error", f"{cstr.color.LIGHTRED}WAS Extras {cstr.color.END}Error: {cstr.color.END}")
 
 extras = [
     ".ConditioningBlend",
