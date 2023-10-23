@@ -10,7 +10,7 @@ import comfy.samplers
 import comfy.model_management
 import nodes
 
-from cstr import cstr
+from WAS_Extras import cstr
 
 def slerp(strength, tensor_from, tensor_to, epsilon=1e-6):
     """
