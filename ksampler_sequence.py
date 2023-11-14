@@ -10,14 +10,6 @@ import comfy.samplers
 import comfy.model_management
 import nodes
 
-from cstr import cstr as cstr_instancer
-
-cstr = cstr_instancer()
-#! MESSAGE TEMPLATES
-cstr.add_code("msg", f"{cstr.color.LIGHTBLUE}KSampler Sequence: {cstr.color.END}")
-cstr.add_code("warning", f"{cstr.color.LIGHTBLUE}KSampler Sequence {cstr.color.LIGHTYELLOW}Warning: {cstr.color.END}")
-cstr.add_code("error", f"{cstr.color.LIGHTRED}KSampler Sequence {cstr.color.END}Error: {cstr.color.END}")
-
 def slerp(strength, tensor_from, tensor_to, epsilon=1e-6):
     """
     Perform Spherical Linear Interpolation (Slerp) between two tensors.
@@ -125,7 +117,7 @@ if "BNK_CLIPTextEncodeAdvanced" in nodes.NODE_CLASS_MAPPINGS:
     USE_BLK = True
 
 if USE_BLK:
-    cstr(f"Found `{cstr.color.BOLD}ComfyUI_ADV_CLIP_emb{cstr.color.END}`. Using {cstr.color.LIGHTYELLOW}BLK Advanced CLIPTextEncode{cstr.color.END} for Conditioning Sequencing").msg.print()
+    print(f"Found `\33[1mComfyUI_ADV_CLIP_emb\33[0m`. Using \33[93mBLK Advanced CLIPTextEncode\33[0m for Conditioning Sequencing")
     blk_adv = BLK_ADV()
 
 class CLIPTextEncodeSequence:
@@ -235,7 +227,7 @@ class KSamplerSeq:
 
             seq_seed = seed if loop_count <= 0 else self.update_seed(seq_seed, seed_mode_seq)
 
-            cstr(f"Loop count: {loop_count}, Seed: {seq_seed}").msg.print()
+            print(f"Loop count: {loop_count}, Seed: {seq_seed}")
 
             last_positive_conditioning = positive_conditioning[0] if positive_conditioning else None
             last_negative_conditioning = negative_conditioning[0] if negative_conditioning else None

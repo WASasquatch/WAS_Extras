@@ -2,14 +2,6 @@ import importlib
 import traceback
 import time
 
-from cstr import cstr as cstr_instancer
-
-cstr = cstr_instancer()
-#! MESSAGE TEMPLATES
-cstr.add_code("msg", f"{cstr.color.LIGHTBLUE}WAS Extras: {cstr.color.END}")
-cstr.add_code("warning", f"{cstr.color.LIGHTBLUE}WAS Extras {cstr.color.LIGHTYELLOW}Warning: {cstr.color.END}")
-cstr.add_code("error", f"{cstr.color.LIGHTRED}WAS Extras {cstr.color.END}Error: {cstr.color.END}")
-
 extras = [
     ".ConditioningBlend",
     ".DebugThis",
@@ -19,12 +11,13 @@ extras = [
     ".BLVaeEncode"
 ]
 
+PREFIX = '\33[31m\33[94m[WAS Extras]\33[0m '
+
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 module_timings = {}
 
-cstr("Loading extra custom nodes...").msg.print()
-
+print(f"{PREFIX}Loading extra custom nodes...")
 
 for module_name in extras:
     start_time = time.time()
@@ -50,7 +43,7 @@ for module_name in extras:
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
-cstr("Import times for extras:").msg.print()
+print(f"{PREFIX} Import times for extras:")
 for module, (timing, success, error) in module_timings.items():
     print(f"   {timing:.1f} seconds{('' if success else ' (IMPORT FAILED)')}: {module}")
     if error:
