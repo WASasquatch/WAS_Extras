@@ -500,7 +500,6 @@ class KSamplerSeq2:
         print(f"Using {len(positive_seq)} positive conditionings and {len(negative_seq)} negative conditionings")
         print(f"Conditioning keyframe schedule is: {', '.join(map(str, cond_keyframes))}")
 
-
         for loop_count in range(sequence_loop_count):
             if loop_count in cond_keyframes:
                 positive_cond_idx = min(positive_cond_idx + 1, len(positive_seq) - 1)
@@ -594,6 +593,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CLIPTextEncodeList": "CLIP Text Encode Sequence (Advanced)",
     "CLIPTextEncodeSequence2": "CLIP Text Encode Sequence (v2)",
     "KSamplerSeq": "KSampler Sequence",
-    "KSamplerSeq2": "KSampler Sequence (v2)"
-
+    "KSamplerSeq2": "KSampler Sequence (v2)",
 }
