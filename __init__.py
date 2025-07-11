@@ -7,6 +7,7 @@ extras = [
     ".DebugThis",
     ".VAEEncodeForInpaint",
     ".VividSharpen",
+    ".VividSharpenV2",
     ".ksampler_sequence",
     ".BLVaeEncode"
 ]
