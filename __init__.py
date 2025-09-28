@@ -10,16 +10,7 @@ try:
     from rich.panel import Panel
     from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, TextColumn
     from rich.traceback import install as rich_traceback_install
-    from rich.theme import Theme
-    THEME = Theme({
-        "was.blue": "#7cc7ff",
-        "was.orange": "orange1",
-        "was.muted": "grey70",
-        "was.good": "#7cc7ff",
-        "was.bad": "orange1",
-        "rule.line": "#7cc7ff",
-    })
-    console = Console(theme=THEME)
+    console = Console(force_terminal=True, no_color=False)
     rich_traceback_install(show_locals=False, word_wrap=True)
 except Exception:
     console = None
@@ -68,19 +59,18 @@ class NodeLoader:
         return mod, ok
 
     def print_intro(self) -> None:
-        msg = (
-            "[was.muted]Nodes in this repo solve specific problems and may not fit every workflow.[/was.muted]"
-        )
+        msg = "Nodes in this repo solve specific problems and may not fit every workflow."
         if console:
-            console.rule(f"[was.blue]{self.prefix.strip()}[/was.blue]", style="rule.line")
-            console.print(Panel(msg, title=f"[was.orange]{self.prefix.strip()}[/was.orange]", border_style="was.blue"))
+            # Single rule and a single-titled panel
+            console.rule(style="cyan")
+            console.print(Panel(msg, title="WAS Extras", border_style="cyan"))
         else:
             print(f"{self.prefix}Nodes in this repo solve specific problems and may not fit every workflow.")
 
     def print_no_nodes_pkg(self) -> None:
         msg = "No ./nodes package found or import failed."
         if console:
-            console.print(f"[was.orange]{self.prefix}{msg}[/was.orange]")
+            console.print(f"{self.prefix}[bold yellow]{msg}[/bold yellow]")
         else:
             print(f"{self.prefix}{msg}")
 
@@ -90,26 +80,20 @@ class NodeLoader:
         fail_count = total - ok_count
         if console:
             table = Table(
-                title=f"[was.blue]{self.prefix}Import Summary[/was.blue]",
                 expand=False,
-                header_style="was.blue",
-                border_style="was.blue",
+                header_style="cyan",
+                border_style="cyan",
             )
             table.add_column("Module/File", overflow="fold")
             table.add_column("Time (s)", justify="right")
             table.add_column("Status", justify="center")
             table.add_column("Error", overflow="fold")
             for path, (timing, success, err) in self.timings.items():
-                status = "[was.good]OK[/was.good]" if success else "[was.bad]FAILED[/was.bad]"
+                status = "[green]OK[/green]" if success else "[red]FAILED[/red]"
                 err_text = "" if err is None else f"{type(err).__name__}: {err}"
                 table.add_row(str(path), f"{timing:.2f}", status, err_text)
             console.print(table)
-            console.rule(style="rule.line")
-            console.print(
-                f"[was.blue]{self.prefix}Totals:[/was.blue] "
-                f"[was.good]{ok_count} ok[/was.good], [was.bad]{fail_count} failed[/was.bad], {total} modules."
-            )
-            console.rule(style="rule.line")
+            console.print(f"Totals: [green]{ok_count} ok[/green], [red]{fail_count} failed[/red], {total} modules.")
         else:
             print(f"{self.prefix} Import times:")
             for path, (timing, success, err) in self.timings.items():
@@ -127,18 +111,18 @@ class NodeLoader:
             return
         if console:
             with Progress(
-                SpinnerColumn(style="was.blue"),
-                TextColumn("[progress.description]{task.description}", style="was.muted"),
+                SpinnerColumn(style="cyan"),
+                TextColumn("[progress.description]{task.description}", style="bright_black"),
                 TimeElapsedColumn(),
                 console=console,
                 transient=True,
             ) as progress:
-                task = progress.add_task(f"[was.orange]{self.prefix}Loading nodes from ./nodes ...[/was.orange]", total=None)
+                task = progress.add_task("Loading nodes from ./nodes ...", total=None)
                 for _, name, _ in pkgutil.walk_packages(nodes_pkg.__path__, prefix=nodes_pkg.__name__ + "."):
                     self.import_module(name)
                 progress.remove_task(task)
         else:
-            print(f"{self.prefix}Loading nodes from ./nodes ...")
+            print("Loading nodes from ./nodes ...")
             for _, name, _ in pkgutil.walk_packages(nodes_pkg.__path__, prefix=nodes_pkg.__name__ + "."):
                 self.import_module(name)
         self.print_summary()

@@ -74,8 +74,13 @@ class LUTLoader:
     def discover_cube_files() -> list[Path]:
         out: list[Path] = []
         for d in LUTLoader.get_lut_dirs():
-            out.extend(sorted(d.glob("*.cube")))
-        return out
+            try:
+                for p in d.iterdir():
+                    if p.is_file() and p.suffix.lower() == ".cube":
+                        out.append(p)
+            except Exception:
+                continue
+        return sorted(out, key=lambda p: p.name.lower())
 
     @staticmethod
     def luts_signature() -> str:
@@ -157,6 +162,27 @@ class LUTLoader:
             return LUT(title, domain_min, domain_max, arr, None)
 
         raise ValueError(f"{path.name}: invalid .cube")
+
+    @staticmethod
+    def save_cube(path: Path, lut: 'LUT') -> None:
+        # Ensure 3D table
+        if lut.table_3d is None:
+            raise ValueError("save_cube expects a 3D LUT table")
+        table = lut.table_3d
+        N = int(table.shape[0])
+        dom_min = np.asarray(lut.domain_min, dtype=np.float32).tolist()
+        dom_max = np.asarray(lut.domain_max, dtype=np.float32).tolist()
+        with path.open("w", encoding="utf-8") as f:
+            f.write(f"TITLE \"{lut.title or path.stem}\"\n")
+            f.write(f"LUT_3D_SIZE {N}\n")
+            f.write(f"DOMAIN_MIN {dom_min[0]:.6f} {dom_min[1]:.6f} {dom_min[2]:.6f}\n")
+            f.write(f"DOMAIN_MAX {dom_max[0]:.6f} {dom_max[1]:.6f} {dom_max[2]:.6f}\n")
+            # Write values in r-fastest order matching our reader's reshape
+            for r in range(N):
+                for g in range(N):
+                    for b in range(N):
+                        R, G, B = table[r, g, b]
+                        f.write(f"{float(R):.6f} {float(G):.6f} {float(B):.6f}\n")
 
     @staticmethod
     def synthesize_builtin_lut(name: str, size: int = 33) -> LUT:
@@ -518,14 +544,6 @@ class WASLoadLUT:
             }
         }
 
-    @classmethod
-    def IS_CHANGED(cls, **kwargs):
-        sig = LUTLoader.luts_signature()
-        if sig != cls._last_sig:
-            cls._last_sig = sig
-            return time.time()
-        return None
-
     RETURN_TYPES = ("LUT",)
     RETURN_NAMES = ("lut",)
 
@@ -709,7 +727,9 @@ class LUTBlender:
     @staticmethod
     def _linear_to_srgb(x: np.ndarray) -> np.ndarray:
         x = x.astype(np.float32)
-        return np.where(x <= 0.0031308, x * 12.92, 1.055 * (np.clip(x, 0.0, None) ** (1/2.4)) - 0.055).astype(np.float32)
+        xc = np.clip(x, 0.0, None)
+        out = np.where(xc <= 0.0031308, xc * 12.92, 1.055 * (xc ** (1/2.4)) - 0.055)
+        return out.astype(np.float32)
 
     @staticmethod
     def _rgb_linear_to_xyz(rgb: np.ndarray) -> np.ndarray:
@@ -718,7 +738,8 @@ class LUTBlender:
             [0.2126729, 0.7151522, 0.0721750],
             [0.0193339, 0.1191920, 0.9503041],
         ], dtype=np.float32)
-        return np.tensordot(rgb, M.T, axes=1).astype(np.float32)
+        xyz = np.tensordot(rgb, M.T, axes=1).astype(np.float32)
+        return np.nan_to_num(xyz, nan=0.0, posinf=1e6, neginf=-1e6)
 
     @staticmethod
     def _xyz_to_rgb_linear(xyz: np.ndarray) -> np.ndarray:
@@ -727,16 +748,38 @@ class LUTBlender:
             [-0.9692660,  1.8760108,  0.0415560],
             [ 0.0556434, -0.2040259,  1.0572252],
         ], dtype=np.float32)
+        rgb = np.tensordot(xyz, M.T, axes=1).astype(np.float32)
+        return np.nan_to_num(rgb, nan=0.0, posinf=1e6, neginf=-1e6)
+
+    @staticmethod
+    def _xyz_d65_to_d50(xyz: np.ndarray) -> np.ndarray:
+        M = np.array([
+            [ 0.9555766, -0.0230393,  0.0631636],
+            [-0.0282895,  1.0099416,  0.0210077],
+            [ 0.0122982, -0.0204830,  1.3299098],
+        ], dtype=np.float32)
+        return np.tensordot(xyz, M.T, axes=1).astype(np.float32)
+
+    @staticmethod
+    def _xyz_d50_to_d65(xyz: np.ndarray) -> np.ndarray:
+        M = np.array([
+            [ 1.0478112,  0.0228866, -0.0501270],
+            [ 0.0295424,  0.9904844, -0.0170491],
+            [-0.0092345,  0.0150436,  0.7521316],
+        ], dtype=np.float32)
         return np.tensordot(xyz, M.T, axes=1).astype(np.float32)
 
     @staticmethod
     def _rgb_to_lab(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         lin = LUTBlender._srgb_to_linear(rgb)
-        xyz = LUTBlender._rgb_linear_to_xyz(lin)
-        Xn, Yn, Zn = 0.95047, 1.0, 1.08883
-        x = xyz[..., 0] / Xn
-        y = xyz[..., 1] / Yn
-        z = xyz[..., 2] / Zn
+        xyz_d65 = LUTBlender._rgb_linear_to_xyz(lin)
+        xyz = LUTBlender._xyz_d65_to_d50(xyz_d65)
+        # Avoid tiny negative values from numeric error before cbrt
+        xyz = np.clip(xyz, 0.0, None)
+        Xn, Yn, Zn = 0.96422, 1.0, 0.82521
+        x = xyz[..., 0] / np.clip(Xn, 1e-8, None)
+        y = xyz[..., 1] / np.clip(Yn, 1e-8, None)
+        z = xyz[..., 2] / np.clip(Zn, 1e-8, None)
         e = (6/29) ** 3
         k = (29/6) ** 2 / 3
         f = lambda t: np.where(t > e, np.cbrt(t), k * t + 4/29)
@@ -755,12 +798,15 @@ class LUTBlender:
         e3 = e ** 3
         k = 3 * (e ** 2)
         invf = lambda t: np.where(t > e, t ** 3, (t - 4/29) / k)
-        Xn, Yn, Zn = 0.95047, 1.0, 1.08883
+
+        Xn, Yn, Zn = 0.96422, 1.0, 0.82521
         x = invf(fx) * Xn
         y = invf(fy) * Yn
         z = invf(fz) * Zn
-        xyz = np.stack([x, y, z], axis=-1).astype(np.float32)
-        lin = LUTBlender._xyz_to_rgb_linear(xyz)
+        xyz_d50 = np.stack([x, y, z], axis=-1).astype(np.float32)
+
+        xyz_d65 = LUTBlender._xyz_d50_to_d65(xyz_d50)
+        lin = LUTBlender._xyz_to_rgb_linear(xyz_d65)
         rgb = LUTBlender._linear_to_srgb(lin)
         return np.clip(rgb, 0.0, 1.0).astype(np.float32)
 
@@ -804,6 +850,10 @@ class LUTBlender:
         L = La * (1.0 - tt) + Lb * tt
         A = aa * (1.0 - tt) + ab * tt
         B = ba * (1.0 - tt) + bb * tt
+        # Clamp to valid Lab ranges to reduce out-of-gamut artifacts
+        L = np.clip(L, 0.0, 100.0)
+        A = np.clip(A, -128.0, 128.0)
+        B = np.clip(B, -128.0, 128.0)
         out = LUTBlender._lab_to_rgb(L, A, B)
         return np.clip(out, 0.0, 1.0).astype(np.float32)
 
@@ -929,6 +979,43 @@ class WASApplyLUT:
             y = image * (1.0 - strength) + y * strength
         return (y.clamp(0, 1),)
 
+# Save LUT
+
+class WASSaveLUT:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "lut": ("LUT",),
+                "filename": ("STRING", {"default": "CustomLUT"}),
+                "output_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2}),
+                "overwrite": ("BOOL", {"default": False}),
+            }
+        }
+
+    RETURN_TYPES = ("LUT",)
+    RETURN_NAMES = ("lut",)
+    FUNCTION = "run"
+    CATEGORY = "WAS/Color/LUT"
+
+    def run(self, lut, filename, output_size, overwrite):
+        lut_dirs = LUTLoader.get_lut_dirs()
+        if not lut_dirs:
+            raise RuntimeError("No models/LUT directory found. Please create one under your ComfyUI models folder.")
+        dst_dir = lut_dirs[0]
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        name = filename.strip()
+        if not name.lower().endswith(".cube"):
+            name += ".cube"
+        path = dst_dir / name
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"{path} exists. Enable overwrite to replace.")
+
+        lut3 = WASLUT.convert_to_3d(lut, output_size)
+        LUTLoader.save_cube(path, lut3)
+
+        return (lut3,)
+
 # RGB PARADE
 
 def get_temp_dir() -> str:
@@ -1022,6 +1109,7 @@ NODE_CLASS_MAPPINGS = {
     "WASLoadLUT": WASLoadLUT,
     "WASCombineLUT": WASCombineLUT,
     "WASApplyLUT": WASApplyLUT,
+    "WASSaveLUT": WASSaveLUT,
     "WASChannelWaveform": WASChannelWaveform,
 }
 
@@ -1029,5 +1117,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "WASLoadLUT": "WAS Load LUT",
     "WASCombineLUT": "WAS LUT Blender",
     "WASApplyLUT": "WAS Apply LUT",
+    "WASSaveLUT": "WAS Save LUT (.cube)",
     "WASChannelWaveform": "WAS Channel Waveform (Parade)",
 }
