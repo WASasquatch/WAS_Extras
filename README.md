@@ -43,3 +43,17 @@ A VAE Encode that can store the latent in the workflow for easy sharing, potenti
 
 Workflow Example:
 ![ComfyUI_02554_](https://github.com/WASasquatch/WAS_Extras/assets/1151589/1a4f33e2-fb7a-49c7-90eb-727ecbef8ff7)
+
+
+## WAS LUT
+Load and combine LUTs, and visualize RGB waveform with RGB parade view.
+
+### Provides
+ - WASLoadLUT
+   - Create a custom LUT, load a preset, or load *.cube files from your `ComfyUI/models/LUT` folder.
+ - WASCombineLUT
+   - Combine multiple LUTs into a single LUT.
+ - WASApplyLUT
+   - Apply a LUT to an image.
+ - WASChannelWaveform
+   - Visualize the RGB waveform with RGB parade view.

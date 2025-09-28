@@ -47,14 +47,28 @@ class LUTLoader:
     @staticmethod
     def get_lut_dirs() -> list[Path]:
         dirs: list[Path] = []
+        seen: set[Path] = set()
         try:
-            for base in MODEL_ROOTS:
-                p = Path(base) / "LUT"
-                if p.exists() and p.is_dir():
-                    dirs.append(p)
-            return dirs
+            for key, (paths, _exts) in folder_names_and_paths.items():
+                for p in paths:
+                    pp = Path(p)
+                    models_dir = pp.parent
+                    if models_dir.name != "models":
+                        for ancestor in pp.parents:
+                            if ancestor.name == "models":
+                                models_dir = ancestor
+                                break
+                    if models_dir.name != "models":
+                        continue
+                    lut_dir = models_dir / "LUT"
+                    if lut_dir.exists() and lut_dir.is_dir() and lut_dir not in seen:
+                        seen.add(lut_dir)
+                        dirs.append(lut_dir)
         except Exception:
-            raise Exception("Failed to load LUTs")
+            print("[WASLUT] Unable to load LUT directory.", flush=True)
+            pass
+
+        return dirs
 
     @staticmethod
     def discover_cube_files() -> list[Path]:
@@ -448,7 +462,6 @@ class WaveformScope:
 
 def get_lut_choice_list() -> list[str]:
     cubes = LUTLoader.discover_cube_files()
-    # Put Custom first so it becomes the default; exclude legacy "No Change"
     names = ["Custom"]
     names += [name for name, _ in LUTLoader.BUILTIN_PRESETS]
     names += [f"LUT: {p.name}" for p in cubes]
@@ -543,13 +556,11 @@ class LUTBlender:
 
     @staticmethod
     def blend_cosine(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
-        # Cosine interpolation adjusts t to ease-in/ease-out
         tt = (1.0 - np.cos(np.pi * float(t))) * 0.5
         return (a * (1.0 - tt) + b * tt).astype(np.float32)
 
     @staticmethod
     def blend_smoothstep(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
-        # Smoothstep interpolation for t
         tt = float(t)
         tt = tt * tt * (3.0 - 2.0 * tt)
         return (a * (1.0 - tt) + b * tt).astype(np.float32)
@@ -564,26 +575,25 @@ class LUTBlender:
         eps = 1e-8
         ta = a.astype(np.float32)
         tb = b.astype(np.float32)
-        # Magnitudes
+
         na = np.linalg.norm(ta, axis=-1, keepdims=True)
         nb = np.linalg.norm(tb, axis=-1, keepdims=True)
         ua = ta / np.clip(na, eps, None)
         ub = tb / np.clip(nb, eps, None)
-        # Cosine of angle between directions
+
         dot = np.clip(np.sum(ua * ub, axis=-1, keepdims=True), -1.0, 1.0)
         omega = np.arccos(dot)
         sin_omega = np.sin(omega)
         tt = float(t)
-        # Avoid division by zero
         mask_small = (sin_omega < 1e-4).astype(np.float32)
-        # Slerp direction
+
         coeff_a = np.where(mask_small == 1.0, 1.0 - tt, np.sin((1.0 - tt) * omega) / np.clip(sin_omega, eps, None))
         coeff_b = np.where(mask_small == 1.0, tt, np.sin(tt * omega) / np.clip(sin_omega, eps, None))
         u = coeff_a * ua + coeff_b * ub
-        # Normalize direction after blend to be safe
+
         nu = np.linalg.norm(u, axis=-1, keepdims=True)
         u = u / np.clip(nu, eps, None)
-        # Lerp magnitudes
+
         mag = (1.0 - tt) * na + tt * nb
         out = u * mag
         return np.clip(out, 0.0, 1.0).astype(np.float32)
@@ -615,7 +625,7 @@ class LUTBlender:
         t = v * (1.0 - s * (1.0 - f))
         i_mod = i % 6
         rgb = np.zeros((*h.shape, 3), dtype=np.float32)
-        # Assign based on sector
+
         mask = (i_mod == 0)
         rgb[..., 0] = np.where(mask, v, rgb[..., 0])
         rgb[..., 1] = np.where(mask, t, rgb[..., 1])
