@@ -372,6 +372,24 @@ class WaveformScope:
             return None
 
     @staticmethod
+    def _big_font():
+        # Try to load a larger truetype font for better legibility; fallback to default
+        # Common fonts to try across platforms
+        candidates = [
+            "DejaVuSansMono.ttf",
+            "DejaVuSans.ttf",
+            "Arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
+        for path in candidates:
+            try:
+                return ImageFont.truetype(path, size=14)
+            except Exception:
+                continue
+        return WaveformScope._font()
+
+    @staticmethod
     def make_waveform_gray(ch_gray: np.ndarray, out_h: int) -> np.ndarray:
         h, w = ch_gray.shape
         out_h = max(int(out_h), 128)
@@ -426,7 +444,7 @@ class WaveformScope:
                        r_stats: tuple[float, float, float, float, float],
                        g_stats: tuple[float, float, float, float, float],
                        b_stats: tuple[float, float, float, float, float],
-                       gap: int = 8, pad: int = 60, left_pad: int = 56) -> np.ndarray:
+                       gap: int = 8, pad: int = 72, left_pad: int = 56) -> np.ndarray:
         h, w = wfr.shape
         pr = (np.stack([wfr, np.zeros_like(wfr), np.zeros_like(wfr)], -1) * 255.0 + 0.5).astype(np.uint8)
         pg = (np.stack([np.zeros_like(wfg), wfg, np.zeros_like(wfg)], -1) * 255.0 + 0.5).astype(np.uint8)
@@ -452,10 +470,21 @@ class WaveformScope:
         g_txt = f"G  min {g_stats[0]:.4f}  max {g_stats[1]:.4f}  mean {g_stats[2]:.4f}  std {g_stats[3]:.4f}  median {g_stats[4]:.4f}"
         b_txt = f"B  min {b_stats[0]:.4f}  max {b_stats[1]:.4f}  mean {b_stats[2]:.4f}  std {b_stats[3]:.4f}  median {b_stats[4]:.4f}"
         d = ImageDraw.Draw(canvas)
+        big_font = WaveformScope._big_font()
+        # Estimate line height for spacing
+        try:
+            bbox = big_font.getbbox("Ag")
+            line_h = (bbox[3] - bbox[1]) + 4
+        except Exception:
+            line_h = 18
         y0 = H + 6
-        d.text((6, y0), r_txt, fill=(255, 64, 64), font=font, stroke_width=1, stroke_fill=(0, 0, 0))
-        d.text((6, y0 + 16), g_txt, fill=(64, 255, 64), font=font, stroke_width=1, stroke_fill=(0, 0, 0))
-        d.text((6, y0 + 32), b_txt, fill=(64, 128, 255), font=font, stroke_width=1, stroke_fill=(0, 0, 0))
+        # X positions aligned under each channel
+        x_r = left_pad + 0 * (w + gap) + 6
+        x_g = left_pad + 1 * (w + gap) + 6
+        x_b = left_pad + 2 * (w + gap) + 6
+        d.text((x_r, y0), r_txt, fill=(255, 64, 64), font=big_font, stroke_width=1, stroke_fill=(0, 0, 0))
+        d.text((x_g, y0), g_txt, fill=(64, 255, 64), font=big_font, stroke_width=1, stroke_fill=(0, 0, 0))
+        d.text((x_b, y0), b_txt, fill=(64, 128, 255), font=big_font, stroke_width=1, stroke_fill=(0, 0, 0))
         return np.array(canvas, dtype=np.uint8)
         
 #  Load LUT
@@ -498,6 +527,8 @@ class WASLoadLUT:
         return None
 
     RETURN_TYPES = ("LUT",)
+    RETURN_NAMES = ("lut",)
+
     FUNCTION = "run"
     CATEGORY = "WAS/Color/LUT"
 
@@ -660,7 +691,6 @@ class LUTBlender:
 
     @staticmethod
     def blend_hsv(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
-        # Convert to HSV, circularly lerp hue, linearly lerp s and v
         ha, sa, va = LUTBlender._rgb_to_hsv(a)
         hb, sb, vb = LUTBlender._rgb_to_hsv(b)
         tt = float(t)
@@ -669,6 +699,123 @@ class LUTBlender:
         s = sa * (1.0 - tt) + sb * tt
         v = va * (1.0 - tt) + vb * tt
         out = LUTBlender._hsv_to_rgb(h, s, v)
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    @staticmethod
+    def _srgb_to_linear(x: np.ndarray) -> np.ndarray:
+        x = x.astype(np.float32)
+        return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4).astype(np.float32)
+
+    @staticmethod
+    def _linear_to_srgb(x: np.ndarray) -> np.ndarray:
+        x = x.astype(np.float32)
+        return np.where(x <= 0.0031308, x * 12.92, 1.055 * (np.clip(x, 0.0, None) ** (1/2.4)) - 0.055).astype(np.float32)
+
+    @staticmethod
+    def _rgb_linear_to_xyz(rgb: np.ndarray) -> np.ndarray:
+        M = np.array([
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ], dtype=np.float32)
+        return np.tensordot(rgb, M.T, axes=1).astype(np.float32)
+
+    @staticmethod
+    def _xyz_to_rgb_linear(xyz: np.ndarray) -> np.ndarray:
+        M = np.array([
+            [ 3.2404542, -1.5371385, -0.4985314],
+            [-0.9692660,  1.8760108,  0.0415560],
+            [ 0.0556434, -0.2040259,  1.0572252],
+        ], dtype=np.float32)
+        return np.tensordot(xyz, M.T, axes=1).astype(np.float32)
+
+    @staticmethod
+    def _rgb_to_lab(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        lin = LUTBlender._srgb_to_linear(rgb)
+        xyz = LUTBlender._rgb_linear_to_xyz(lin)
+        Xn, Yn, Zn = 0.95047, 1.0, 1.08883
+        x = xyz[..., 0] / Xn
+        y = xyz[..., 1] / Yn
+        z = xyz[..., 2] / Zn
+        e = (6/29) ** 3
+        k = (29/6) ** 2 / 3
+        f = lambda t: np.where(t > e, np.cbrt(t), k * t + 4/29)
+        fx, fy, fz = f(x), f(y), f(z)
+        L = 116 * fy - 16
+        a = 500 * (fx - fy)
+        b = 200 * (fy - fz)
+        return L.astype(np.float32), a.astype(np.float32), b.astype(np.float32)
+
+    @staticmethod
+    def _lab_to_rgb(L: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        fy = (L + 16.0) / 116.0
+        fx = fy + (a / 500.0)
+        fz = fy - (b / 200.0)
+        e = (6/29)
+        e3 = e ** 3
+        k = 3 * (e ** 2)
+        invf = lambda t: np.where(t > e, t ** 3, (t - 4/29) / k)
+        Xn, Yn, Zn = 0.95047, 1.0, 1.08883
+        x = invf(fx) * Xn
+        y = invf(fy) * Yn
+        z = invf(fz) * Zn
+        xyz = np.stack([x, y, z], axis=-1).astype(np.float32)
+        lin = LUTBlender._xyz_to_rgb_linear(xyz)
+        rgb = LUTBlender._linear_to_srgb(lin)
+        return np.clip(rgb, 0.0, 1.0).astype(np.float32)
+
+    @staticmethod
+    def _rgb_to_oklab(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        lin = LUTBlender._srgb_to_linear(rgb)
+        M1 = np.array([
+            [0.4122214708, 0.5363325363, 0.0514459929],
+            [0.2119034982, 0.6806995451, 0.1073969566],
+            [0.0883024619, 0.2817188376, 0.6299787005],
+        ], dtype=np.float32)
+        lms = np.tensordot(lin, M1.T, axes=1).astype(np.float32)
+        l_, m_, s_ = np.cbrt(lms[..., 0]), np.cbrt(lms[..., 1]), np.cbrt(lms[..., 2])
+        L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_
+        a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_
+        b = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+        return L.astype(np.float32), a.astype(np.float32), b.astype(np.float32)
+
+    @staticmethod
+    def _oklab_to_rgb(L: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        l_ = L + 0.3963377774 * a + 0.2158037573 * b
+        m_ = L - 0.1055613458 * a - 0.0638541728 * b
+        s_ = L - 0.0894841775 * a - 1.2914855480 * b
+        l = l_ ** 3
+        m = m_ ** 3
+        s = s_ ** 3
+        M2 = np.array([
+            [ 4.0767416621, -3.3077115913,  0.2309699292],
+            [-1.2684380046,  2.6097574011, -0.3413193965],
+            [-0.0041960863, -0.7034186147,  1.7076147010],
+        ], dtype=np.float32)
+        lin = np.tensordot(np.stack([l, m, s], axis=-1), M2.T, axes=1).astype(np.float32)
+        rgb = LUTBlender._linear_to_srgb(lin)
+        return np.clip(rgb, 0.0, 1.0).astype(np.float32)
+
+    @staticmethod
+    def blend_lab(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
+        La, aa, ba = LUTBlender._rgb_to_lab(a)
+        Lb, ab, bb = LUTBlender._rgb_to_lab(b)
+        tt = float(t)
+        L = La * (1.0 - tt) + Lb * tt
+        A = aa * (1.0 - tt) + ab * tt
+        B = ba * (1.0 - tt) + bb * tt
+        out = LUTBlender._lab_to_rgb(L, A, B)
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    @staticmethod
+    def blend_oklab(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
+        La, aa, ba = LUTBlender._rgb_to_oklab(a)
+        Lb, ab, bb = LUTBlender._rgb_to_oklab(b)
+        tt = float(t)
+        L = La * (1.0 - tt) + Lb * tt
+        A = aa * (1.0 - tt) + ab * tt
+        B = ba * (1.0 - tt) + bb * tt
+        out = LUTBlender._oklab_to_rgb(L, A, B)
         return np.clip(out, 0.0, 1.0).astype(np.float32)
 
     @staticmethod
@@ -699,6 +846,8 @@ class LUTBlender:
             "smoothstep",
             "slerp",
             "hsv",
+            "lab",
+            "oklab",
             "auto",
             "multiply",
             "screen",
@@ -720,6 +869,7 @@ class WASCombineLUT:
         }
 
     RETURN_TYPES = ("LUT",)
+    RETURN_NAMES = ("lut",)
 
     FUNCTION = "run"
     CATEGORY = "WAS/Color/LUT"
@@ -737,6 +887,10 @@ class WASCombineLUT:
             C = LUTBlender.blend_slerp(A, B, strength)
         elif mode == "hsv":
             C = LUTBlender.blend_hsv(A, B, strength)
+        elif mode == "lab":
+            C = LUTBlender.blend_lab(A, B, strength)
+        elif mode == "oklab":
+            C = LUTBlender.blend_oklab(A, B, strength)
         elif mode == "auto":
             C = LUTBlender.blend_auto(A, B, strength)
         elif mode == "multiply":
@@ -762,6 +916,7 @@ class WASApplyLUT:
         }
 
     RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES =  ("image",)
 
     FUNCTION = "run"
     CATEGORY = "WAS/Color/LUT"
@@ -815,6 +970,7 @@ class WASChannelWaveform:
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("red_waveform", "green_waveform", "blue_waveform", "rgb_parade")
     OUTPUT_NODE = True
+
     FUNCTION = "run"
     CATEGORY = "WAS/Image/Scopes"
 
@@ -860,6 +1016,7 @@ class WASChannelWaveform:
         parade_batch = torch.cat(parade_list, dim=0)
 
         return {"ui": {"images": ui_entries}, "result": (red_batch, green_batch, blue_batch, parade_batch)}
+
 
 NODE_CLASS_MAPPINGS = {
     "WASLoadLUT": WASLoadLUT,
