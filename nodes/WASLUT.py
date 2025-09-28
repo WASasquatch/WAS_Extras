@@ -989,7 +989,7 @@ class WASSaveLUT:
                 "lut": ("LUT",),
                 "filename": ("STRING", {"default": "CustomLUT"}),
                 "output_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2}),
-                "overwrite": ("BOOL", {"default": False}),
+                "overwrite": ("BOOLEAN", {"default": True}),
             }
         }
 
