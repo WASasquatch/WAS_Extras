@@ -1,14 +1,28 @@
 [project]
-name = "was_extras"
-description = "Nodes:Conditioning (Blend), Inpainting VAE Encode (WAS), VividSharpen. Experimental nodes, or other random extra helper nodes."
-version = "1.0.2"
-license = "LICENSE"
+name = "was-extras"
+version = "1.0.0"
+description = "A collection of experimental WAS nodes and utilities for ComfyUI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT License" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Environment :: GPU :: AMD ROCm",
+    "Environment :: GPU :: Apple Metal"
+]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
 
 [project.urls]
 Repository = "https://github.com/WASasquatch/WAS_Extras"
-#  Used by Comfy Registry https://comfyregistry.org
+"Bug Tracker" = "https://github.com/WASasquatch/WAS_Extras/issues"
 
 [tool.comfy]
 PublisherId = "was"
-DisplayName = "WAS_Extras"
-Icon = ""
+DisplayName = "WAS Extras"
+requires-comfyui = ">=1.0.0"
