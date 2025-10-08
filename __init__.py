@@ -3,7 +3,7 @@ import pkgutil
 import time
 import traceback
 
-# Rich (optional)
+
 try:
     from rich.console import Console
     from rich.table import Table

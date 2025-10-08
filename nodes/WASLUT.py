@@ -7,6 +7,41 @@ import torch
 
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+
+try:
+    from comfy.utils import ProgressBar as ComfyProgressBar
+except Exception:
+    from tqdm import tqdm
+
+    class ComfyProgressBar:
+        def __init__(self, total=None):
+            try:
+                self._bar = tqdm(total=total, desc="Applying LUT", unit="frame")
+            except Exception:
+                self._bar = None
+
+        def update(self, n: int = 1):
+            try:
+                if self._bar is not None:
+                    self._bar.update(n)
+            except Exception:
+                pass
+
+        def close(self):
+            try:
+                if self._bar is not None:
+                    self._bar.close()
+            except Exception:
+                pass
+
+        def __del__(self):
+            try:
+                if self._bar is not None:
+                    self._bar.close()
+            except Exception:
+                pass
 
 try:
     from folder_paths import folder_names_and_paths
@@ -962,6 +997,8 @@ class WASApplyLUT:
                 "image": ("IMAGE",),
                 "lut": ("LUT",),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "use_threads": ("BOOLEAN", {"default": False}),
+                "threads": ("INT", {"default": 0, "min": 0, "max": 64, "step": 1}),
             }
         }
 
@@ -971,13 +1008,49 @@ class WASApplyLUT:
     FUNCTION = "run"
     CATEGORY = "WAS/Color/LUT"
 
-    def run(self, image, lut, strength):
+    def run(self, image, lut, strength, use_threads=False, threads=0):
         size = lut.size() if lut.size() > 1 else 33
         lut3 = WASLUT.convert_to_3d(lut, size)
-        y = WASLUT.apply_lut_3d(image, lut3.table_3d, lut3.domain_min, lut3.domain_max).clamp(0, 1)
-        if strength < 1.0:
-            y = image * (1.0 - strength) + y * strength
-        return (y.clamp(0, 1),)
+
+        b = int(image.shape[0])
+        pb = ComfyProgressBar(total=b)
+
+        if (not use_threads) or b <= 1:
+            y = WASLUT.apply_lut_3d(image, lut3.table_3d, lut3.domain_min, lut3.domain_max).clamp(0, 1)
+            if strength < 1.0:
+                y = image * (1.0 - strength) + y * strength
+            pb.update(b)
+            return (y.clamp(0, 1),)
+
+        try:
+            cpu_cnt = os.cpu_count() or 1
+        except Exception:
+            cpu_cnt = 1
+        max_workers = int(threads) if int(threads) > 0 else min(cpu_cnt, b)
+        max_workers = max(1, min(max_workers, 64))
+
+        frames = [(i, image[i:i+1]) for i in range(b)]
+        results = [None] * b
+        lock = threading.Lock()
+
+        def work(item):
+            i, frame = item
+            yi = WASLUT.apply_lut_3d(frame, lut3.table_3d, lut3.domain_min, lut3.domain_max).clamp(0, 1)
+            if strength < 1.0:
+                yi = frame * (1.0 - strength) + yi * strength
+            yi = yi.clamp(0, 1)
+            with lock:
+                pb.update(1)
+            return i, yi
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = [ex.submit(work, item) for item in frames]
+            for f in as_completed(futs):
+                i, yi = f.result()
+                results[i] = yi
+
+        y = torch.cat(results, dim=0)
+        return (y,)
 
 # Save LUT
 
