@@ -101,7 +101,6 @@ class LUTLoader:
                         dirs.append(lut_dir)
         except Exception:
             print("[WASLUT] Unable to load LUT directory.", flush=True)
-            pass
 
         return dirs
 
@@ -176,7 +175,14 @@ class LUTLoader:
             expected = size_3d ** 3
             if len(data) != expected:
                 raise ValueError(f"{path.name}: expected {expected}, got {len(data)}")
-            arr = np.asarray(data, dtype=np.float32).reshape(size_3d, size_3d, size_3d, 3)
+            arr_raw = np.asarray(data, dtype=np.float32).reshape(size_3d, size_3d, size_3d, 3)
+            grid = torch.linspace(0, 1, steps=size_3d)
+            rr, gg, bb = torch.meshgrid(grid, grid, grid, indexing="ij")
+            ident = torch.stack([rr, gg, bb], dim=-1).cpu().numpy().astype(np.float32)
+            err_curr = float(np.mean((arr_raw - ident) ** 2))
+            arr_swap = np.transpose(arr_raw, (2, 1, 0, 3))
+            err_swap = float(np.mean((arr_swap - ident) ** 2))
+            arr = arr_swap if (err_swap + 1e-12) < err_curr else arr_raw
             return LUT(title, domain_min, domain_max, None, arr)
 
         if size_1d is not None:
@@ -189,7 +195,14 @@ class LUTLoader:
         n = len(data)
         k = round(n ** (1 / 3))
         if k * k * k == n and k > 1:
-            arr = np.asarray(data, dtype=np.float32).reshape(k, k, k, 3)
+            arr_raw = np.asarray(data, dtype=np.float32).reshape(k, k, k, 3)
+            grid = torch.linspace(0, 1, steps=k)
+            rr, gg, bb = torch.meshgrid(grid, grid, grid, indexing="ij")
+            ident = torch.stack([rr, gg, bb], dim=-1).cpu().numpy().astype(np.float32)
+            err_curr = float(np.mean((arr_raw - ident) ** 2))
+            arr_swap = np.transpose(arr_raw, (2, 1, 0, 3))
+            err_swap = float(np.mean((arr_swap - ident) ** 2))
+            arr = arr_swap if (err_swap + 1e-12) < err_curr else arr_raw
             return LUT(title, domain_min, domain_max, None, arr)
 
         arr = np.asarray(data, dtype=np.float32)
@@ -564,18 +577,18 @@ class WASLoadLUT:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "look": (get_lut_choice_list(),),
-                "builtin_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2}),
-                "custom_ev": ("FLOAT", {"default": 0.0, "min": -4.0, "max": 4.0, "step": 0.01}),
-                "custom_contrast": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 3.0, "step": 0.01}),
-                "custom_saturation": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.01}),
-                "custom_vibrance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "custom_gamma": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 3.0, "step": 0.01}),
-                "custom_temperature": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "custom_tint": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "custom_red_balance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "custom_green_balance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "custom_blue_balance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
+                "look": (get_lut_choice_list(), {"tooltip": "Select a builtin look, a discovered .cube LUT, or 'Custom'."}),
+                "builtin_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2, "tooltip": "LUT dimension used for builtins or custom synthesis."}),
+                "custom_ev": ("FLOAT", {"default": 0.0, "min": -4.0, "max": 4.0, "step": 0.01, "tooltip": "Exposure value adjustment (Custom)."}),
+                "custom_contrast": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 3.0, "step": 0.01, "tooltip": "Contrast multiplier (Custom)."}),
+                "custom_saturation": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.01, "tooltip": "Saturation multiplier (Custom)."}),
+                "custom_vibrance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01, "tooltip": "Boost low-saturation more than high (Custom)."}),
+                "custom_gamma": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 3.0, "step": 0.01, "tooltip": "Gamma correction (Custom)."}),
+                "custom_temperature": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01, "tooltip": "White-balance temperature (Custom)."}),
+                "custom_tint": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01, "tooltip": "White-balance tint (Custom)."}),
+                "custom_red_balance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01, "tooltip": "Red channel balance (Custom)."}),
+                "custom_green_balance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01, "tooltip": "Green channel balance (Custom)."}),
+                "custom_blue_balance": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01, "tooltip": "Blue channel balance (Custom)."}),
             }
         }
 
@@ -945,11 +958,11 @@ class WASCombineLUT:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "lut_a": ("LUT",),
-                "lut_b": ("LUT",),
-                "mode": (LUTBlender.get_modes(),),
-                "strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "output_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2}),
+                "lut_a": ("LUT", {"tooltip": "First LUT to blend."}),
+                "lut_b": ("LUT", {"tooltip": "Second LUT to blend."}),
+                "mode": (LUTBlender.get_modes(), {"tooltip": "Blending method between the two LUTs."}),
+                "strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Blend weight between A and B."}),
+                "output_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2, "tooltip": "Dimension of the output LUT."}),
             }
         }
 
@@ -994,11 +1007,11 @@ class WASApplyLUT:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "lut": ("LUT",),
-                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "use_threads": ("BOOLEAN", {"default": False}),
-                "threads": ("INT", {"default": 0, "min": 0, "max": 64, "step": 1}),
+                "image": ("IMAGE", {"tooltip": "Images to apply the LUT to (NHWC)."}),
+                "lut": ("LUT", {"tooltip": "Lookup table to apply."}),
+                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Mix between original and LUT-applied result."}),
+                "use_threads": ("BOOLEAN", {"default": False, "tooltip": "Process frames in parallel using CPU threads."}),
+                "threads": ("INT", {"default": 0, "min": 0, "max": 64, "step": 1, "tooltip": "Override number of worker threads (0=auto)."}),
             }
         }
 
@@ -1059,10 +1072,10 @@ class WASSaveLUT:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "lut": ("LUT",),
-                "filename": ("STRING", {"default": "CustomLUT"}),
-                "output_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2}),
-                "overwrite": ("BOOLEAN", {"default": True}),
+                "lut": ("LUT", {"tooltip": "The LUT to save as a .cube file."}),
+                "filename": ("STRING", {"default": "CustomLUT", "tooltip": "Base filename ('.cube' will be appended if missing)."}),
+                "output_size": ("INT", {"default": 33, "min": 17, "max": 65, "step": 2, "tooltip": "Dimension to resample the LUT before saving."}),
+                "overwrite": ("BOOLEAN", {"default": True, "tooltip": "Allow overwriting an existing file."}),
             }
         }
 
@@ -1122,8 +1135,8 @@ class WASChannelWaveform:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "waveform_height": ("INT", {"default": 512, "min": 128, "max": 2048, "step": 1}),
+                "image": ("IMAGE", {"tooltip": "Images to analyze (NHWC)."}),
+                "waveform_height": ("INT", {"default": 512, "min": 128, "max": 2048, "step": 1, "tooltip": "Vertical resolution of waveform display (px)."}),
             }
         }
 

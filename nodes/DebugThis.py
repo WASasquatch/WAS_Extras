@@ -15,7 +15,7 @@ class WAS_DebugThis:
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {"input": (wildcard, {})},
+            "required": {"input": (wildcard, {"tooltip": "Any input to print/inspect in the console."})},
         }
 
     RETURN_TYPES = ()

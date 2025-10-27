@@ -101,8 +101,6 @@ def hslerp(a, b, t):
 
     return result
 
-import torch
-
 blending_modes = {
     # Linearly combines the two input tensors a and b using the parameter t.
     'add': lambda a, b, t: (a * t + b * (1 - t)),
@@ -147,11 +145,11 @@ class WAS_ConditioningBlend:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "conditioning_a": ("CONDITIONING", ),
-                "conditioning_b": ("CONDITIONING", ),
-                "blending_mode": (list(blending_modes.keys()), ),
-                "blending_strength": ("FLOAT", {"default": 0.5, "min": -10.0, "max": 10.0, "step": 0.001}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "conditioning_a": ("CONDITIONING", {"tooltip": "First conditioning input."}),
+                "conditioning_b": ("CONDITIONING", {"tooltip": "Second conditioning input."}),
+                "blending_mode": (list(blending_modes.keys()), {"tooltip": "Blend algorithm to combine conditionings."}),
+                "blending_strength": ("FLOAT", {"default": 0.5, "min": -10.0, "max": 10.0, "step": 0.001, "tooltip": "Blend strength; interpretation depends on mode."}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Optional seed to make stochastic modes reproducible."}),
             }
         }
 

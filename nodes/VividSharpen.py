@@ -66,9 +66,9 @@ class VividSharpen:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
-                "radius": ("FLOAT", {"default": 1.5, "min": 0.01, "max": 64.0, "step": 0.01}),
-                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "images": ("IMAGE", {"tooltip": "Images to sharpen (NHWC)."}),
+                "radius": ("FLOAT", {"default": 1.5, "min": 0.01, "max": 64.0, "step": 0.01, "tooltip": "Blur radius used to build high-pass layer."}),
+                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Mix amount between original and sharpened result."}),
             },
         }
 

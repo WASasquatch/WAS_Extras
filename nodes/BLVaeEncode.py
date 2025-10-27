@@ -17,15 +17,15 @@ class BLVAEEncode:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "vae": ("VAE",),
-                "tiled": ("BOOLEAN", {"default": False}),
-                "tile_size": ("INT", {"default": 512, "min": 320, "max": 4096, "step": 64}),
-                "store_or_load_latent": ("BOOLEAN", {"default": True}),
-                "remove_latent_on_load": ("BOOLEAN", {"default": True}),
-                "delete_workflow_latent": ("BOOLEAN", {"default": False})
+                "vae": ("VAE", {"tooltip": "VAE module used to encode the input image into latents."}),
+                "tiled": ("BOOLEAN", {"default": False, "tooltip": "Encode using tiled VAE to reduce VRAM usage."}),
+                "tile_size": ("INT", {"default": 512, "min": 320, "max": 4096, "step": 64, "tooltip": "Tile size for tiled encoding (pixels)."}),
+                "store_or_load_latent": ("BOOLEAN", {"default": True, "tooltip": "Store encoded latent into the workflow metadata or load an existing one if present."}),
+                "remove_latent_on_load": ("BOOLEAN", {"default": True, "tooltip": "Delete the stored latent from workflow after loading it."}),
+                "delete_workflow_latent": ("BOOLEAN", {"default": False, "tooltip": "Force delete any stored latent in this node before encoding/loading."})
             },
             "optional": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {"tooltip": "Input image to encode when not loading from workflow metadata."}),
             },
             "hidden": {
                 "extra_pnginfo": "EXTRA_PNGINFO",

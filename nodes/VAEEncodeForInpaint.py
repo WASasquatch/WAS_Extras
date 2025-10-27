@@ -1,11 +1,14 @@
-# Provides demonstration of PR https://github.com/comfyanonymous/ComfyUI/pull/1574/commits/297d1cff422198806cda40e4b6d71a6e6aa05453
-
 import torch
 
 class WAS_VAEEncodeForInpaint:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": { "pixels": ("IMAGE", ), "vae": ("VAE", ), "mask": ("MASK", ), "mask_offset": ("INT", {"default": 6, "min": -128, "max": 128, "step": 1}),}}
+        return {"required": { 
+            "pixels": ("IMAGE", {"tooltip": "Input image to encode for inpainting."}), 
+            "vae": ("VAE", {"tooltip": "VAE module used to encode the image."}), 
+            "mask": ("MASK", {"tooltip": "Inpaint mask; white=painted region, black=protected."}), 
+            "mask_offset": ("INT", {"default": 6, "min": -128, "max": 128, "step": 1, "tooltip": "Positive expands mask (dilate), negative shrinks (erode)."}),
+        }}
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "encode"
 

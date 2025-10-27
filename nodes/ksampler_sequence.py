@@ -126,13 +126,13 @@ class CLIPTextEncodeSequence:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "clip": ("CLIP", ),
-                "token_normalization": (["none", "mean", "length", "length+mean"],),
-                "weight_interpretation": (["comfy", "A1111", "compel", "comfy++"],),
+                "clip": ("CLIP", {"tooltip": "CLIP model used to encode text prompts."}),
+                "token_normalization": (["none", "mean", "length", "length+mean"], {"tooltip": "Normalization strategy for token weights."}),
+                "weight_interpretation": (["comfy", "A1111", "compel", "comfy++"], {"tooltip": "How to interpret weights and syntax in the text."}),
                 "text": ("STRING", {"multiline": True, "default": '''0:A portrait of a rosebud
 5:A portrait of a blooming rosebud
 10:A portrait of a blooming rose
-15:A portrait of a rose'''}),
+15:A portrait of a rose''', "tooltip": "One entry per line in the form 'frameIndex:prompt'."})
                 }
             }
         
@@ -169,15 +169,15 @@ class CLIPTextEncodeSequence2:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "clip": ("CLIP", ),
-                "token_normalization": (["none", "mean", "length", "length+mean"],),
-                "weight_interpretation": (["comfy", "A1111", "compel", "comfy++"],),
-                "cond_keyframes_type": (["linear", "sinus", "sinus_inverted", "half_sinus", "half_sinus_inverted"],),
-                "frame_count": ("INT", {"default": 100, "min": 1, "max": 1024, "step": 1}),
+                "clip": ("CLIP", {"tooltip": "CLIP model to encode prompts."}),
+                "token_normalization": (["none", "mean", "length", "length+mean"], {"tooltip": "Normalization strategy for token weights."}),
+                "weight_interpretation": (["comfy", "A1111", "compel", "comfy++"], {"tooltip": "How to interpret weights and syntax in the text."}),
+                "cond_keyframes_type": (["linear", "sinus", "sinus_inverted", "half_sinus", "half_sinus_inverted"], {"tooltip": "Schedule describing when to switch to the next prompt."}),
+                "frame_count": ("INT", {"default": 100, "min": 1, "max": 1024, "step": 1, "tooltip": "Total frames for which to generate conditioning."}),
                 "text": ("STRING", {"multiline": True, "default": '''A portrait of a rosebud
 A portrait of a blooming rosebud
 A portrait of a blooming rose
-A portrait of a rose'''}),
+A portrait of a rose''', "tooltip": "List of prompts; keyframe schedule determines when to advance."})
             }
         }
         
@@ -248,25 +248,25 @@ class KSamplerSeq:
     def INPUT_TYPES(s):
         return {"required":
                     {"model": ("MODEL",),
-                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "seed_mode_seq": (["increment", "decrement", "random", "fixed"],),
-                    "alternate_values": ("BOOLEAN", {"default": True}),
-                    "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
-                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.5, "round": 0.01}),
-                    "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
-                    "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-                    "sequence_loop_count": ("INT", {"default": 20, "min": 1, "max": 1024, "step": 1}),
-                    "positive_seq": ("CONDITIONING_SEQ", ),
-                    "negative_seq": ("CONDITIONING_SEQ", ),
-                    "use_conditioning_slerp": ("BOOLEAN", {"default": False}),
-                    "cond_slerp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001}),
-                    "latent_image": ("LATENT", ),
-                    "use_latent_interpolation": ("BOOLEAN", {"default": False}),
-                    "latent_interpolation_mode": (["Blend", "Slerp", "Cosine Interp"],),
-                    "latent_interp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001}),
-                    "denoise_start": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                    "denoise_seq": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                    "unsample_latents": ("BOOLEAN", {"default": False})
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Base seed for the sequence."}),
+                    "seed_mode_seq": (["increment", "decrement", "random", "fixed"], {"tooltip": "How to evolve the seed each loop."}),
+                    "alternate_values": ("BOOLEAN", {"default": True, "tooltip": "Alternate certain parameters every other loop."}),
+                    "steps": ("INT", {"default": 20, "min": 1, "max": 10000, "tooltip": "Sampler steps per loop."}),
+                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.5, "round": 0.01, "tooltip": "Classifier-free guidance."}),
+                    "sampler_name": (comfy.samplers.KSampler.SAMPLERS, {"tooltip": "Sampler algorithm."} ),
+                    "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"tooltip": "Noise schedule."} ),
+                    "sequence_loop_count": ("INT", {"default": 20, "min": 1, "max": 1024, "step": 1, "tooltip": "How many loops to run."}),
+                    "positive_seq": ("CONDITIONING_SEQ", {"tooltip": "List of positive conditionings with frame indices."} ),
+                    "negative_seq": ("CONDITIONING_SEQ", {"tooltip": "List of negative conditionings with frame indices."} ),
+                    "use_conditioning_slerp": ("BOOLEAN", {"default": False, "tooltip": "Interpolate between consecutive conditionings using slerp."}),
+                    "cond_slerp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Interpolation amount for slerp."}),
+                    "latent_image": ("LATENT", {"tooltip": "Initial latent input."} ),
+                    "use_latent_interpolation": ("BOOLEAN", {"default": False, "tooltip": "Blend/slerp/cosine between consecutive outputs."}),
+                    "latent_interpolation_mode": (["Blend", "Slerp", "Cosine Interp"], {"tooltip": "Method for latent interpolation."}),
+                    "latent_interp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Interpolation weight for latents."}),
+                    "denoise_start": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Denoise for the first loop (1.0 = full)."}),
+                    "denoise_seq": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Denoise for subsequent loops."}),
+                    "unsample_latents": ("BOOLEAN", {"default": False, "tooltip": "Reverse a few steps before resampling to add variation."})
                      }
                 }
 
@@ -407,33 +407,33 @@ class KSamplerSeq2:
     def INPUT_TYPES(s):
         return {"required":
                     {"model": ("MODEL",),
-                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "seed_mode_seq": (["increment", "decrement", "random", "fixed"],),
-                    "alternate_values": ("BOOLEAN", {"default": True}),
-                    "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
-                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.5, "round": 0.01}),
-                    "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
-                    "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-                    "frame_count": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}),
-                    "cond_keyframes": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}),
-                    "positive_seq": ("CONDITIONING", ),
-                    "negative_seq": ("CONDITIONING", ),
-                    "use_conditioning_slerp": ("BOOLEAN", {"default": False}),
-                    "cond_slerp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001}),
-                    "latent_image": ("LATENT", ),
-                    "use_latent_interpolation": ("BOOLEAN", {"default": False}),
-                    "latent_interpolation_mode": (["Blend", "Slerp", "Cosine Interp"],),
-                    "latent_interp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001}),
-                    "denoise_start": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                    "denoise_seq": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                    "unsample_latents": ("BOOLEAN", {"default": False}),
-                    "inject_noise": ("BOOLEAN", {"default": True}),
-                    "noise_strength": ("FLOAT", {"default": 0.1, "max": 1.0, "min": 0.001, "step": 0.001}),
-                    "denoise_sine": ("BOOLEAN", {"default": True}),
-                    "denoise_max": ("FLOAT", {"default": 0.9, "max": 1.0, "min": 0.0, "step": 0.001}),
-                    "seed_keying": ("BOOLEAN", {"default": True}),
-                    "seed_keying_mode": (["sine", "modulo"],),
-                    "seed_divisor": ("INT", {"default": 4, "max": 1024, "min": 2, "step": 1}),
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Base seed for the sequence."}),
+                    "seed_mode_seq": (["increment", "decrement", "random", "fixed"], {"tooltip": "How to evolve the seed each loop."}),
+                    "alternate_values": ("BOOLEAN", {"default": True, "tooltip": "Alternate certain parameters every other loop."}),
+                    "steps": ("INT", {"default": 20, "min": 1, "max": 10000, "tooltip": "Sampler steps per loop."}),
+                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.5, "round": 0.01, "tooltip": "Classifier-free guidance."}),
+                    "sampler_name": (comfy.samplers.KSampler.SAMPLERS, {"tooltip": "Sampler algorithm."} ),
+                    "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"tooltip": "Noise schedule."} ),
+                    "frame_count": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1, "tooltip": "Total frames to run. If 0, inferred from conditionings."}),
+                    "cond_keyframes": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1, "tooltip": "Keyframe indices to advance conditionings (list)."}),
+                    "positive_seq": ("CONDITIONING", {"tooltip": "Positive conditioning list."} ),
+                    "negative_seq": ("CONDITIONING", {"tooltip": "Negative conditioning list."} ),
+                    "use_conditioning_slerp": ("BOOLEAN", {"default": False, "tooltip": "Interpolate between consecutive conditionings using slerp."}),
+                    "cond_slerp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Interpolation amount for slerp."}),
+                    "latent_image": ("LATENT", {"tooltip": "Initial latent input."} ),
+                    "use_latent_interpolation": ("BOOLEAN", {"default": False, "tooltip": "Blend/slerp/cosine between consecutive outputs."}),
+                    "latent_interpolation_mode": (["Blend", "Slerp", "Cosine Interp"], {"tooltip": "Method for latent interpolation."}),
+                    "latent_interp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Interpolation weight for latents."}),
+                    "denoise_start": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Denoise for the first loop (1.0 = full)."}),
+                    "denoise_seq": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Denoise for subsequent loops."}),
+                    "unsample_latents": ("BOOLEAN", {"default": False, "tooltip": "Reverse a few steps before resampling to add variation."}),
+                    "inject_noise": ("BOOLEAN", {"default": True, "tooltip": "Add random noise between loops for variety."}),
+                    "noise_strength": ("FLOAT", {"default": 0.1, "max": 1.0, "min": 0.001, "step": 0.001, "tooltip": "Magnitude of injected noise."}),
+                    "denoise_sine": ("BOOLEAN", {"default": True, "tooltip": "Vary denoise over loops using a sine wave."}),
+                    "denoise_max": ("FLOAT", {"default": 0.9, "max": 1.0, "min": 0.0, "step": 0.001, "tooltip": "Max denoise when sine modulation is enabled."}),
+                    "seed_keying": ("BOOLEAN", {"default": True, "tooltip": "Modulate seed by a schedule to create patterns."}),
+                    "seed_keying_mode": (["sine", "modulo"], {"tooltip": "Mode for seed modulation."}),
+                    "seed_divisor": ("INT", {"default": 4, "max": 1024, "min": 2, "step": 1, "tooltip": "Period or divisor for seed/keyframe modulation."}),
                      }
                 }
 
