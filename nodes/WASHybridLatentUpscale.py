@@ -322,7 +322,7 @@ class WASLatentUpscaleHybrid:
             donor_latent=donor_samples,
         )
 
-        out = dict(samples)
+        out = dict(latent)
         out["samples"] = up_latent
 
         if cfg.output_mask_resolution == "latent":
