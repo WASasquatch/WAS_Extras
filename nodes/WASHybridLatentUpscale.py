@@ -283,7 +283,7 @@ class WASLatentUpscaleHybrid:
 
     def execute(
         self,
-        samples,
+        latent,
         vae,
         scale: float,
         pre_blur_sigma_px: float,
@@ -298,7 +298,7 @@ class WASLatentUpscaleHybrid:
         output_mask_resolution: str,
         donor_latent=None,
     ):
-        latent_samples = samples["samples"]
+        latent_samples = latent["samples"]
         donor_samples = donor_latent["samples"] if donor_latent is not None else None
 
         cfg = EdgeBlendConfig(
