@@ -2,6 +2,7 @@ import importlib
 import pkgutil
 import time
 import traceback
+import os
 
 
 try:
@@ -19,6 +20,8 @@ PREFIX = "[WAS Extras] "
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
+
+WEB_DIRECTORY = os.path.join(os.path.dirname(__file__), "web")
 
 
 class NodeLoader:
@@ -131,4 +134,4 @@ class NodeLoader:
 _loader = NodeLoader(package_name=__name__, prefix=PREFIX)
 _loader.load_all()
 
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]

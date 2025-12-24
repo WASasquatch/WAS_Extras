@@ -1,2 +1,4 @@
 rich
 numpy
+tqdm
+safetensors
