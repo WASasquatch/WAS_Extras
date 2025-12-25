@@ -4,6 +4,21 @@ import { api } from "../../scripts/api.js";
 const EXT_NAME = "WAS_Extras.PowerLoraMergerUI";
 const NODE_NAME = "WASPowerLoraMerger";
 
+const WAS_OVERRIDDEN_SERVER_NODES = new Map();
+let WAS_OVERRIDE_REGISTERED = false;
+
+function registerWasNodeOverrideSystem() {
+  if (WAS_OVERRIDE_REGISTERED) return;
+  if (!globalThis?.LiteGraph?.registerNodeType) return;
+  WAS_OVERRIDE_REGISTERED = true;
+
+  const oldregisterNodeType = LiteGraph.registerNodeType;
+  LiteGraph.registerNodeType = async function (nodeId, baseClass) {
+    const clazz = WAS_OVERRIDDEN_SERVER_NODES.get(baseClass) || baseClass;
+    return oldregisterNodeType.call(LiteGraph, nodeId, clazz);
+  };
+}
+
 function toBool(v, defaultValue = true) {
   if (v == null) return defaultValue;
   if (typeof v === "boolean") return v;
@@ -60,198 +75,6 @@ async function refreshNodeDefsAndUpdate(node) {
   }
 }
 
-function showLoraChooser(event, callback, parentMenu, loras) {
-  const canvas = app.canvas;
-  const safeLoras = normalizeLoraOptions(loras);
-  const nestedMenuValues = buildNestedLoraMenuValues(safeLoras, callback);
-
-  let safeEvent = event;
-  if (!(safeEvent instanceof MouseEvent) && !(safeEvent instanceof CustomEvent)) {
-    try {
-      const canvasEl = canvas?.canvas;
-      const rect = canvasEl?.getBoundingClientRect?.();
-      const mx = canvas?.mouse?.[0] ?? canvas?.last_mouse?.[0] ?? 0;
-      const my = canvas?.mouse?.[1] ?? canvas?.last_mouse?.[1] ?? 0;
-      const clientX = (rect?.left ?? 0) + mx;
-      const clientY = (rect?.top ?? 0) + my;
-      safeEvent = new MouseEvent("contextmenu", {
-        bubbles: true,
-        cancelable: true,
-        clientX,
-        clientY,
-      });
-    } catch (e) {
-      safeEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
-    }
-  }
-
-  new LiteGraph.ContextMenu(nestedMenuValues, {
-    event: safeEvent,
-    parentMenu: parentMenu ?? undefined,
-    title: "WAS LoRA Picker",
-    scale: Math.max(1, canvas?.ds?.scale ?? 1),
-    className: "dark",
-    callback,
-  });
-}
-
-function splitLoraPath(path) {
-  const normalized = String(path ?? "").replace(/\\/g, "/");
-  return normalized.split("/").filter((p) => p.length > 0);
-}
-
-function buildLoraTree(loras) {
-  const root = { folders: new Map(), files: [], all: [] };
-
-  for (const raw of loras) {
-    if (typeof raw !== "string") continue;
-    if (raw === "None") continue;
-
-    const parts = splitLoraPath(raw);
-    if (!parts.length) continue;
-
-    let node = root;
-    node.all.push(raw);
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isLeaf = i === parts.length - 1;
-      if (isLeaf) {
-        node.files.push({ name: part, full: raw });
-      } else {
-        if (!node.folders.has(part)) {
-          node.folders.set(part, { folders: new Map(), files: [], all: [] });
-        }
-        node = node.folders.get(part);
-        node.all.push(raw);
-      }
-    }
-  }
-
-  return root;
-}
-
-function filterLoras(loras, query) {
-  const q = String(query ?? "").trim().toLowerCase();
-  if (!q) return Array.isArray(loras) ? loras.slice() : [];
-  const arr = Array.isArray(loras) ? loras : [];
-  return arr.filter((x) => typeof x === "string" && x.toLowerCase().includes(q));
-}
-
-function makeSearchMenuItem(title, allLoras, onPick) {
-  return {
-    content: title,
-    callback: (_value, _options, event, parentMenu, node) => {
-      let q = "";
-      try {
-        q = window?.prompt?.("Filter LoRAs", "") ?? "";
-      } catch (e) {
-        q = "";
-      }
-
-      const filtered = filterLoras(allLoras, q);
-      const t = buildLoraTree(filtered);
-      const menuValues = treeToMenuValues(t, onPick, filtered);
-
-      new LiteGraph.ContextMenu(menuValues, {
-        event,
-        parentMenu: parentMenu ?? undefined,
-        title: "WAS LoRA Picker",
-        scale: Math.max(1, app?.canvas?.ds?.scale ?? 1),
-        className: "dark",
-        callback: (_v, _o, _e, _pm, _n) => {
-        },
-      }, node);
-    },
-  };
-}
-
-function treeToMenuValues(treeNode, onPick, allLorasForNode) {
-  const values = [];
-
-  // Folder-aware search: show a filter action for the current folder/subtree.
-  const folderAll = Array.isArray(allLorasForNode) ? allLorasForNode : (treeNode?.all ?? []);
-  if (Array.isArray(folderAll) && folderAll.length) {
-    values.push(makeSearchMenuItem("🔎 Filter in this folder", folderAll, onPick));
-    values.push(null);
-  }
-
-  const folderNames = Array.from(treeNode.folders.keys()).sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
-  );
-
-  for (const folderName of folderNames) {
-    const child = treeNode.folders.get(folderName);
-    values.push({
-      content: `📁 ${folderName}`,
-      has_submenu: true,
-      callback: () => {
-      },
-      submenu: {
-        options: treeToMenuValues(child, onPick, child?.all ?? []),
-      },
-    });
-  }
-
-  const files = Array.isArray(treeNode.files) ? treeNode.files.slice() : [];
-  files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
-  for (const f of files) {
-    values.push({
-      content: f.name,
-      rgthree_originalValue: f.full,
-      callback: (_value, options, event, parentMenu, node) => {
-        onPick?.(f.full, options, event, parentMenu, node);
-      },
-    });
-  }
-
-  return values;
-}
-
-function buildNestedLoraMenuValues(loras, onPick) {
-  const safe = normalizeLoraOptions(loras);
-
-  const out = [];
-
-  // Root-level search across the entire LoRA catalog.
-  const safeNoNone = safe.filter((x) => typeof x === "string" && x !== "None");
-  if (safeNoNone.length) {
-    out.push(makeSearchMenuItem("🔎 Filter LoRAs", safeNoNone, onPick));
-    out.push(null);
-  }
-
-  if (safe.includes("None")) {
-    out.push({
-      content: "None",
-      rgthree_originalValue: "None",
-      callback: (_value, options, event, parentMenu, node) => {
-        onPick?.("None", options, event, parentMenu, node);
-      },
-    });
-  }
-
-  const tree = buildLoraTree(safe);
-  const nested = treeToMenuValues(tree, onPick, tree?.all ?? []);
-  out.push(...nested);
-
-  return out;
-}
-
-function pickedLoraValue(value) {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") {
-    // Folder items should never be treated as a picked LoRA.
-    if (value.has_submenu || value.submenu) return null;
-    const orig = value.rgthree_originalValue;
-    if (typeof orig === "string") return orig;
-    const c = value.content;
-    if (typeof c === "string") {
-      if (c.startsWith("📁 ")) return null;
-      return c;
-    }
-  }
-  return null;
-}
-
 function ensureState(node) {
   if (!node.properties) node.properties = {};
   if (!Array.isArray(node.properties.was_lora_rows)) {
@@ -284,20 +107,40 @@ function getLoraOptions(node) {
   return normalizeLoraOptions(opts);
 }
 
-function makeHiddenPayloadWidget(name, stateRef) {
-  return {
-    name,
-    type: "custom",
-    value: stateRef,
-    computeSize() {
-      return [0, 0];
-    },
-    draw() {
-    },
-    serializeValue() {
-      return { ...stateRef };
-    },
-  };
+function rowToPayloadString(row) {
+  const on = !!row?.on;
+  const lora = typeof row?.lora === "string" ? row.lora : null;
+  const weight = Number.isFinite(Number(row?.weight)) ? Number(row.weight) : 1.0;
+  return JSON.stringify({ on, lora, weight });
+}
+
+function updatePayloadWidget(payloadWidget, row) {
+  if (!payloadWidget) return;
+  payloadWidget.value = rowToPayloadString(row);
+}
+
+function rowsToPayloadAllString(rows) {
+  const arr = Array.isArray(rows) ? rows : [];
+  const safe = arr.map((r) => {
+    const on = !!r?.on;
+    const lora = typeof r?.lora === "string" ? r.lora : null;
+    const weight = Number.isFinite(Number(r?.weight)) ? Number(r.weight) : 1.0;
+    return { on, lora, weight };
+  });
+  return JSON.stringify(safe);
+}
+
+function updateAllPayloadWidget(payloadWidget, rows) {
+  if (!payloadWidget) return;
+  payloadWidget.value = rowsToPayloadAllString(rows);
+}
+
+function findWidgetByName(node, name) {
+  const widgets = Array.isArray(node?.widgets) ? node.widgets : [];
+  for (const w of widgets) {
+    if (w?.name === name) return w;
+  }
+  return null;
 }
 
 function makeSectionHeaderWidget(name, title) {
@@ -329,18 +172,48 @@ function makeSectionHeaderWidget(name, title) {
   };
 }
 
+function removeWidgetSafe(node, index) {
+  const widgets = Array.isArray(node?.widgets) ? node.widgets : null;
+  const w = widgets?.[index];
+  if (!w) return;
+  try {
+    node.removeWidget(index);
+    return;
+  } catch (e) {
+  }
+  try {
+    node.removeWidget(w);
+    return;
+  } catch (e) {
+  }
+  try {
+    widgets.splice(index, 1);
+  } catch (e) {
+  }
+}
+
 function clearWasWidgets(node) {
   if (!node.widgets) return;
-  node.widgets = node.widgets.filter((w) => {
+
+  // Do not mutate node.widgets directly (e.g. filter/assign). LiteGraph tracks widget values
+  // by index; direct mutation can desync widgets <-> widgets_values and break persistence.
+  for (let i = node.widgets.length - 1; i >= 0; i--) {
+    const w = node.widgets[i];
     const n = w?.name;
     const rowId = w?.options?.id;
-    if (rowId === "row_add") return false;
-    if (rowId === "row_remove_last") return false;
-    if (rowId === "row_clear") return false;
-    if (rowId === "row_refresh") return false;
-    if (!n) return true;
-    return !(n.startsWith("was_row_") || n.startsWith("lora_"));
-  });
+
+    if (rowId === "row_add" || rowId === "row_remove_last" || rowId === "row_clear" || rowId === "row_refresh") {
+      removeWidgetSafe(node, i);
+      continue;
+    }
+
+    if (typeof n !== "string") continue;
+    if (n === "lora_payload_all") continue;
+
+    if (n.startsWith("was_row_") || n.startsWith("lora_")) {
+      removeWidgetSafe(node, i);
+    }
+  }
 }
 
 function syncRowsFromWidgets(node) {
@@ -352,6 +225,10 @@ function syncRowsFromWidgets(node) {
   for (const w of widgets) {
     const name = w?.name;
     if (typeof name !== "string") continue;
+
+    if (name === "lora_payload_all") {
+      continue;
+    }
 
     const mCombo = /^lora_(\d+)$/.exec(name);
     if (mCombo) {
@@ -381,9 +258,11 @@ function syncRowsFromWidgets(node) {
     }
   }
 
-  const targetLen = Math.max(1, maxIdxSeen + 1);
-  if (rows.length > targetLen) {
-    rows.length = targetLen;
+  if (maxIdxSeen >= 0) {
+    const targetLen = Math.max(1, maxIdxSeen + 1);
+    if (rows.length > targetLen) {
+      rows.length = targetLen;
+    }
   }
 
   return rows;
@@ -394,6 +273,26 @@ function rebuildLoraRows(node, loraOptions, sync = true) {
   clearWasWidgets(node);
 
   node.addCustomWidget(makeSectionHeaderWidget("was_row_header", "Selected LoRA's"));
+
+  // A single stable serialized widget that persists the entire row list.
+  const payloadAllName = "lora_payload_all";
+  let payloadAllWidget = findWidgetByName(node, payloadAllName);
+  if (!payloadAllWidget) {
+    payloadAllWidget = node.addWidget(
+      "text",
+      payloadAllName,
+      rowsToPayloadAllString(rows),
+      () => {
+      },
+      { multiline: true, label: payloadAllName },
+    );
+  }
+  if (payloadAllWidget) {
+    payloadAllWidget.computeSize = () => [0, 0];
+    payloadAllWidget.draw = () => {
+    };
+    updateAllPayloadWidget(payloadAllWidget, rows);
+  }
 
   const resolvedOptions = normalizeLoraOptions(loraOptions);
 
@@ -406,8 +305,6 @@ function rebuildLoraRows(node, loraOptions, sync = true) {
 
   rows.forEach((row, idx) => {
     const rowIndex = idx + 1;
-    const payloadName = `lora_payload_${rowIndex}`;
-    node.addCustomWidget(makeHiddenPayloadWidget(payloadName, row));
 
     if (typeof row.lora !== "string") row.lora = row.lora == null ? null : String(row.lora);
     if (!Number.isFinite(row.weight)) row.weight = 1.0;
@@ -419,6 +316,7 @@ function rebuildLoraRows(node, loraOptions, sync = true) {
       !!row.on,
       (v) => {
         row.on = !!v;
+        updateAllPayloadWidget(payloadAllWidget, rows);
       },
       { label: `lora_${rowIndex}_enabled` },
     );
@@ -429,6 +327,7 @@ function rebuildLoraRows(node, loraOptions, sync = true) {
       row.lora ?? "None",
       (v) => {
         row.lora = v === "None" ? null : v;
+        updateAllPayloadWidget(payloadAllWidget, rows);
       },
       { values: resolvedOptions, label: `lora_${rowIndex}` },
     );
@@ -444,35 +343,27 @@ function rebuildLoraRows(node, loraOptions, sync = true) {
       (v) => {
         const n = Number(v);
         row.weight = Number.isFinite(n) ? n : 1.0;
+        updateAllPayloadWidget(payloadAllWidget, rows);
       },
       { min: -10.0, max: 10.0, step: 0.01, precision: 3, label: `lora_${rowIndex}_strength` },
     );
   });
+
+  // Ensure payload-all matches any normalization performed above.
+  updateAllPayloadWidget(payloadAllWidget, rows);
 
   node.addWidget(
     "button",
     "➕ Add LoRA",
     null,
     (...args) => {
-      const event = args?.[1] ?? args?.[0];
-      const opts = getLoraOptions(node);
-      showLoraChooser(
-        event,
-        (value) => {
-          const picked = pickedLoraValue(value);
-          if (typeof picked === "string" && picked !== "None") {
-            syncRowsFromWidgets(node);
-            const curRows = ensureState(node);
-            curRows.push({ on: true, lora: picked, weight: 1.0 });
-            rebuildLoraRows(node, getLoraOptions(node), false);
-            const computed = node.computeSize?.() ?? [node.size[0], node.size[1]];
-            node.size[1] = Math.max(node.size[1], computed[1]);
-            node.setDirtyCanvas(true, true);
-          }
-        },
-        null,
-        opts,
-      );
+      syncRowsFromWidgets(node);
+      const curRows = ensureState(node);
+      curRows.push({ on: true, lora: null, weight: 1.0 });
+      rebuildLoraRows(node, getLoraOptions(node), false);
+      const computed = node.computeSize?.() ?? [node.size[0], node.size[1]];
+      node.size[1] = Math.max(node.size[1], computed[1]);
+      node.setDirtyCanvas(true, true);
     },
     { id: "row_add" },
   );
@@ -544,21 +435,11 @@ app.registerExtension({
       {
         content: "➕ Add LoRA",
         callback: (_value, _options, event) => {
-          showLoraChooser(
-            event,
-            (picked) => {
-              const lora = pickedLoraValue(picked);
-              if (typeof lora === "string" && lora !== "None") {
-                syncRowsFromWidgets(node);
-                const curRows = ensureState(node);
-                curRows.push({ on: true, lora: lora, weight: 1.0 });
-                rebuildLoraRows(node, getLoraOptions(node), false);
-                node.setDirtyCanvas(true, true);
-              }
-            },
-            null,
-            opts,
-          );
+          syncRowsFromWidgets(node);
+          const curRows = ensureState(node);
+          curRows.push({ on: true, lora: null, weight: 1.0 });
+          rebuildLoraRows(node, getLoraOptions(node), false);
+          node.setDirtyCanvas(true, true);
         },
       },
       {
@@ -595,125 +476,144 @@ app.registerExtension({
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData?.name !== NODE_NAME) return;
 
+    registerWasNodeOverrideSystem();
+
     const backendCatalog = nodeData?.input?.hidden?.was_lora_catalog;
 
-    const onNodeCreated = nodeType.prototype.onNodeCreated;
-    nodeType.prototype.onNodeCreated = function () {
-      onNodeCreated?.apply(this, arguments);
-
-      if (!this.widgets) this.widgets = [];
-
-      if (Array.isArray(backendCatalog) && backendCatalog.length) {
-        setLoraOptions(this, backendCatalog);
-      }
-
-      const rows = ensureState(this);
-      if (!rows.length) {
-        rows.push({ on: true, lora: null, weight: 1.0 });
-      }
-
-      const opts = getLoraOptions(this);
-      rebuildLoraRows(this, opts);
-      const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
-      this.size[1] = computed[1];
-      this.setDirtyCanvas(true, true);
-
-      try {
-        if (!this.properties) this.properties = {};
-        if (!this.properties._was_lora_catalog_refresh_pending) {
-          this.properties._was_lora_catalog_refresh_pending = true;
-          setTimeout(async () => {
-            try {
-              await refreshNodeDefsAndUpdate(this);
-            } catch (e) {
-            }
-            try {
-              this.properties._was_lora_catalog_refresh_pending = false;
-            } catch (e) {
-            }
-          }, 0);
-        }
-      } catch (e) {
-      }
-    };
-
-    const configure = nodeType.prototype.configure;
-    nodeType.prototype.configure = function (info) {
-      const widgetValues = info?.widgets_values || [];
-      const rows = ensureState(this);
-      rows.length = 0;
-
-      for (const v of widgetValues) {
-        if (v && typeof v === "object" && Object.prototype.hasOwnProperty.call(v, "lora")) {
-          rows.push({
-            on: toBool(v.on, true),
-            lora: v.lora ?? null,
-            weight: Number.isFinite(v.weight) ? v.weight : 1.0,
-          });
+    class WASPowerLoraMergerOverride extends nodeType {
+      constructor(...args) {
+        super(...args);
+        this.serialize_widgets = true;
+        try {
+          this.title = nodeType.title ?? this.title;
+        } catch (e) {
         }
       }
 
-      if (!rows.length) {
-        rows.push({ on: true, lora: null, weight: 1.0 });
-      }
+      onNodeCreated() {
+        super.onNodeCreated?.();
 
-      if (Array.isArray(backendCatalog) && backendCatalog.length) {
-        setLoraOptions(this, backendCatalog);
-      }
-
-      const opts = getLoraOptions(this);
-      rebuildLoraRows(this, opts);
-      const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
-      this.size[1] = computed[1];
-      this.setDirtyCanvas(true, true);
-
-      try {
-        if (!this.properties) this.properties = {};
-        if (!this.properties._was_lora_catalog_refresh_pending) {
-          this.properties._was_lora_catalog_refresh_pending = true;
-          setTimeout(async () => {
-            try {
-              await refreshNodeDefsAndUpdate(this);
-            } catch (e) {
-            }
-            try {
-              this.properties._was_lora_catalog_refresh_pending = false;
-            } catch (e) {
-            }
-          }, 0);
+        if (Array.isArray(backendCatalog) && backendCatalog.length) {
+          setLoraOptions(this, backendCatalog);
         }
-      } catch (e) {
-      }
 
-      configure?.apply(this, arguments);
-    };
-
-    const onSerialize = nodeType.prototype.onSerialize;
-    nodeType.prototype.onSerialize = function (o) {
-      try {
         const rows = ensureState(this);
-        const safeRows = rows.map((r) => {
-          const lora = typeof r?.lora === "string" ? r.lora : null;
-          const weight = Number.isFinite(Number(r?.weight)) ? Number(r.weight) : 1.0;
-          return { on: !!r?.on, lora, weight };
-        });
-        o.properties = o.properties || {};
-        o.properties.was_lora_rows = safeRows;
-      } catch (e) {
+        if (!rows.length) {
+          rows.push({ on: true, lora: null, weight: 1.0 });
+        }
+
+        // Avoid double rebuild when loading from a workflow: ComfyUI will call configure(info)
+        // shortly after creation, and configure will rebuild from serialized state.
+        setTimeout(() => {
+          try {
+            if (this._was_plm_configured) return;
+            rebuildLoraRows(this, getLoraOptions(this), false);
+            const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
+            this.size[1] = computed[1];
+            this.setDirtyCanvas(true, true);
+          } catch (e) {
+          }
+        }, 0);
       }
 
-      return onSerialize?.apply(this, arguments);
-    };
+      configure(info) {
+        this._was_plm_configured = true;
+        super.configure?.(info);
 
-    const refreshComboInNode = nodeType.prototype.refreshComboInNode;
-    nodeType.prototype.refreshComboInNode = function (defs) {
-      const fromBackend = defs?.input?.hidden?.was_lora_catalog;
-      if (Array.isArray(fromBackend) && fromBackend.length) {
-        setLoraOptions(this, fromBackend);
-        rebuildLoraRows(this, fromBackend);
+        const prevRows = ensureState(this);
+        const parsed = [];
+        let restoredFromProps = false;
+
+        const parseRows = (arr) => {
+          if (!Array.isArray(arr)) return;
+          for (const v of arr) {
+            let obj = null;
+
+            if (v && typeof v === "object") {
+              obj = v;
+            } else if (typeof v === "string") {
+              const s = v.trim();
+              if (s && (s.startsWith("{") || s.startsWith("["))) {
+                try {
+                  const parsedObj = JSON.parse(s);
+                  if (parsedObj && typeof parsedObj === "object") obj = parsedObj;
+                } catch (e) {
+                }
+              }
+            }
+
+            if (obj && typeof obj === "object" && Object.prototype.hasOwnProperty.call(obj, "lora")) {
+              parsed.push({
+                on: toBool(obj.on, true),
+                lora: obj.lora ?? null,
+                weight: Number.isFinite(Number(obj.weight)) ? Number(obj.weight) : 1.0,
+              });
+            }
+          }
+        };
+
+        try {
+          const propRows = info?.properties?.was_lora_rows;
+          if (Array.isArray(propRows) && propRows.length) {
+            parseRows(propRows);
+            restoredFromProps = true;
+          }
+        } catch (e) {
+        }
+
+        // Only fall back to widgets_values if we didn't already restore from properties.
+        if (!restoredFromProps && Array.isArray(info?.widgets_values)) {
+          for (const v of info.widgets_values) {
+            if (typeof v === "string") {
+              const s = v.trim();
+              if (s.startsWith("[")) {
+                try {
+                  const arr = JSON.parse(s);
+                  parseRows(arr);
+                } catch (e) {
+                }
+              }
+            } else if (Array.isArray(v)) {
+              parseRows(v);
+            }
+          }
+        }
+
+        if (!parsed.length) {
+          parseRows(prevRows);
+        }
+
+        prevRows.length = 0;
+        prevRows.push(...parsed);
+        if (!prevRows.length) {
+          prevRows.push({ on: true, lora: null, weight: 1.0 });
+        }
+
+        if (Array.isArray(backendCatalog) && backendCatalog.length) {
+          setLoraOptions(this, backendCatalog);
+        }
+
+        rebuildLoraRows(this, getLoraOptions(this), false);
+        const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
+        this.size[1] = computed[1];
         this.setDirtyCanvas(true, true);
       }
-      return refreshComboInNode?.apply(this, arguments);
-    };
+
+      refreshComboInNode(defs) {
+        const fromBackend = defs?.input?.hidden?.was_lora_catalog;
+        if (Array.isArray(fromBackend) && fromBackend.length) {
+          setLoraOptions(this, fromBackend);
+          rebuildLoraRows(this, fromBackend, false);
+          this.setDirtyCanvas(true, true);
+        }
+        return super.refreshComboInNode?.(defs);
+      }
+    }
+
+    WASPowerLoraMergerOverride.title = nodeType.title;
+    WASPowerLoraMergerOverride.category = nodeType.category;
+    WASPowerLoraMergerOverride.type = nodeType.type;
+
+    WAS_OVERRIDDEN_SERVER_NODES.set(nodeType, WASPowerLoraMergerOverride);
   },
 });

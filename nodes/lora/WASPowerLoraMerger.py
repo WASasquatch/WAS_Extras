@@ -11,7 +11,7 @@ from tqdm import tqdm
 import folder_paths
 from comfy.utils import ProgressBar
 
-from ..modules.cli import merge_loras_z
+from ...modules.cli import merge_loras_z
 from nodes import LoraLoader
 
 class WASProgress:
@@ -93,8 +93,6 @@ class WASPowerLoraMerger:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model": ("MODEL", {"tooltip": "Base MODEL. The merged LoRA will be applied to this model after saving."}),
-                "clip": ("CLIP", {"tooltip": "Base CLIP. The merged LoRA will be applied to this CLIP after saving."}),
                 "output_filename": (
                     "STRING",
                     {
@@ -150,6 +148,8 @@ class WASPowerLoraMerger:
             "optional": FlexibleOptionalInputType(
                 any_type,
                 {
+                    "model": ("MODEL", {"tooltip": "Optional base MODEL. If provided (with CLIP), the merged LoRA will be applied to these outputs after saving."}),
+                    "clip": ("CLIP", {"tooltip": "Optional base CLIP. If provided (with MODEL), the merged LoRA will be applied to these outputs after saving."}),
                     "options": (
                         "WAS_LORA_MERGE_OPTIONS",
                         {
@@ -170,13 +170,13 @@ class WASPowerLoraMerger:
 
     def merge(
         self,
-        model,
-        clip,
         output_filename: str,
         output_model_strength: float,
         output_clip_strength: float,
         mode: str,
         block_mix_recipe: str,
+        model=None,
+        clip=None,
         options: Any = None,
         **kwargs: Any,
     ):
@@ -212,6 +212,20 @@ class WASPowerLoraMerger:
                     return None
             return None
 
+        def _coerce_payload_list(v: Any) -> Optional[list]:
+            if isinstance(v, list):
+                return v
+            if isinstance(v, str):
+                s = v.strip()
+                if not s:
+                    return None
+                try:
+                    obj = json.loads(s)
+                    return obj if isinstance(obj, list) else None
+                except Exception:
+                    return None
+            return None
+
         payload_rows: List[dict] = []
         flat_enabled: Dict[int, bool] = {}
         flat_lora: Dict[int, Optional[str]] = {}
@@ -222,6 +236,14 @@ class WASPowerLoraMerger:
                 continue
             k = key.lower()
             if not (k.startswith("lora_") or k.startswith("lora_payload_")):
+                continue
+
+            if k == "lora_payload_all":
+                payload_list = _coerce_payload_list(value)
+                if payload_list is not None:
+                    for item in payload_list:
+                        if isinstance(item, dict):
+                            payload_rows.append(item)
                 continue
 
             if k.startswith("lora_payload_"):
@@ -648,7 +670,8 @@ class WASPowerLoraMerger:
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
             print(f"Saved merged LoRA to {out_path}")
 
-        model, clip = LoraLoader().load_lora(model, clip, rel_out, output_model_strength, output_clip_strength)
+        if model is not None and clip is not None:
+            model, clip = LoraLoader().load_lora(model, clip, rel_out, output_model_strength, output_clip_strength)
 
         if progress is not None:
             progress.update_absolute(progress.total)
