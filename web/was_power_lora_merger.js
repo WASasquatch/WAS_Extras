@@ -4,21 +4,6 @@ import { api } from "../../scripts/api.js";
 const EXT_NAME = "WAS_Extras.PowerLoraMergerUI";
 const NODE_NAME = "WASPowerLoraMerger";
 
-const WAS_OVERRIDDEN_SERVER_NODES = new Map();
-let WAS_OVERRIDE_REGISTERED = false;
-
-function registerWasNodeOverrideSystem() {
-  if (WAS_OVERRIDE_REGISTERED) return;
-  if (!globalThis?.LiteGraph?.registerNodeType) return;
-  WAS_OVERRIDE_REGISTERED = true;
-
-  const oldregisterNodeType = LiteGraph.registerNodeType;
-  LiteGraph.registerNodeType = async function (nodeId, baseClass) {
-    const clazz = WAS_OVERRIDDEN_SERVER_NODES.get(baseClass) || baseClass;
-    return oldregisterNodeType.call(LiteGraph, nodeId, clazz);
-  };
-}
-
 function toBool(v, defaultValue = true) {
   if (v == null) return defaultValue;
   if (typeof v === "boolean") return v;
@@ -288,9 +273,14 @@ function rebuildLoraRows(node, loraOptions, sync = true) {
     );
   }
   if (payloadAllWidget) {
+    // Keep this widget out of view in both classic canvas rendering
+    // (computeSize/draw) and Nodes 2.0 / Vue rendering (hidden flags).
     payloadAllWidget.computeSize = () => [0, 0];
     payloadAllWidget.draw = () => {
     };
+    payloadAllWidget.hidden = true;
+    payloadAllWidget.options = payloadAllWidget.options || {};
+    payloadAllWidget.options.hidden = true;
     updateAllPayloadWidget(payloadAllWidget, rows);
   }
 
@@ -476,50 +466,59 @@ app.registerExtension({
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData?.name !== NODE_NAME) return;
 
-    registerWasNodeOverrideSystem();
-
     const backendCatalog = nodeData?.input?.hidden?.was_lora_catalog;
+    const proto = nodeType.prototype;
 
-    class WASPowerLoraMergerOverride extends nodeType {
-      constructor(...args) {
-        super(...args);
-        this.serialize_widgets = true;
+    // Guard against wrapping the same prototype twice (node defs can be
+    // re-registered on a definitions refresh), which would run the rebuild
+    // logic multiple times per node.
+    if (proto.__was_plm_wrapped) return;
+    proto.__was_plm_wrapped = true;
+
+    // Standard, version-stable extension pattern: wrap the prototype methods
+    // directly. (The previous approach monkey-patched LiteGraph.registerNodeType
+    // to swap in a subclass keyed by object identity; that silently failed when
+    // the class identity didn't line up, so none of this code ran and only the
+    // backend-declared widgets showed.)
+    const origOnNodeCreated = proto.onNodeCreated;
+    proto.onNodeCreated = function () {
+      const result = origOnNodeCreated?.apply(this, arguments);
+
+      this.serialize_widgets = true;
+
+      if (Array.isArray(backendCatalog) && backendCatalog.length) {
+        setLoraOptions(this, backendCatalog);
+      }
+
+      const rows = ensureState(this);
+      if (!rows.length) {
+        rows.push({ on: true, lora: null, weight: 1.0 });
+      }
+
+      // Avoid double rebuild when loading from a workflow: ComfyUI will call
+      // configure(info) shortly after creation, and configure rebuilds from
+      // serialized state.
+      setTimeout(() => {
         try {
-          this.title = nodeType.title ?? this.title;
+          if (this._was_plm_configured) return;
+          rebuildLoraRows(this, getLoraOptions(this), false);
+          const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
+          this.size[1] = computed[1];
+          this.setDirtyCanvas(true, true);
         } catch (e) {
+          console.error(`[${EXT_NAME}] Failed to build LoRA rows on create:`, e);
         }
-      }
+      }, 0);
 
-      onNodeCreated() {
-        super.onNodeCreated?.();
+      return result;
+    };
 
-        if (Array.isArray(backendCatalog) && backendCatalog.length) {
-          setLoraOptions(this, backendCatalog);
-        }
+    const origConfigure = proto.configure;
+    proto.configure = function (info) {
+      this._was_plm_configured = true;
+      origConfigure?.call(this, info);
 
-        const rows = ensureState(this);
-        if (!rows.length) {
-          rows.push({ on: true, lora: null, weight: 1.0 });
-        }
-
-        // Avoid double rebuild when loading from a workflow: ComfyUI will call configure(info)
-        // shortly after creation, and configure will rebuild from serialized state.
-        setTimeout(() => {
-          try {
-            if (this._was_plm_configured) return;
-            rebuildLoraRows(this, getLoraOptions(this), false);
-            const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
-            this.size[1] = computed[1];
-            this.setDirtyCanvas(true, true);
-          } catch (e) {
-          }
-        }, 0);
-      }
-
-      configure(info) {
-        this._was_plm_configured = true;
-        super.configure?.(info);
-
+      try {
         const prevRows = ensureState(this);
         const parsed = [];
         let restoredFromProps = false;
@@ -597,23 +596,20 @@ app.registerExtension({
         const computed = this.computeSize?.() ?? [this.size[0], this.size[1]];
         this.size[1] = computed[1];
         this.setDirtyCanvas(true, true);
+      } catch (e) {
+        console.error(`[${EXT_NAME}] Failed to build LoRA rows on configure:`, e);
       }
+    };
 
-      refreshComboInNode(defs) {
-        const fromBackend = defs?.input?.hidden?.was_lora_catalog;
-        if (Array.isArray(fromBackend) && fromBackend.length) {
-          setLoraOptions(this, fromBackend);
-          rebuildLoraRows(this, fromBackend, false);
-          this.setDirtyCanvas(true, true);
-        }
-        return super.refreshComboInNode?.(defs);
+    const origRefreshComboInNode = proto.refreshComboInNode;
+    proto.refreshComboInNode = function (defs) {
+      const fromBackend = defs?.input?.hidden?.was_lora_catalog;
+      if (Array.isArray(fromBackend) && fromBackend.length) {
+        setLoraOptions(this, fromBackend);
+        rebuildLoraRows(this, fromBackend, false);
+        this.setDirtyCanvas(true, true);
       }
-    }
-
-    WASPowerLoraMergerOverride.title = nodeType.title;
-    WASPowerLoraMergerOverride.category = nodeType.category;
-    WASPowerLoraMergerOverride.type = nodeType.type;
-
-    WAS_OVERRIDDEN_SERVER_NODES.set(nodeType, WASPowerLoraMergerOverride);
+      return origRefreshComboInNode?.call(this, defs);
+    };
   },
 });
